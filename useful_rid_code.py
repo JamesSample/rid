@@ -176,7 +176,7 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
     wc_df['unit'] = wc_df['unit'].str.decode('windows-1252')
     wc_df['par'] = wc_df['name'] + '_' + wc_df['unit'].map(unicode)
     del wc_df['station_code'], wc_df['name'], wc_df['unit']
-    
+
     wc_df = wc_df.pivot(index='sample_date', columns='par', values='value')
     
     if plot:
@@ -270,3 +270,108 @@ def extract_discharge(stn_id, st_dt, end_dt, engine, plot=False):
     
     else:    
         return q_df
+    
+def estimate_loads(stn_id, par_list, year, engine):
+    """ Estimates annual pollutant loads for specified site and year.
+        
+    Args:
+        stn_id:    Int. Valid RESA2 STATION_ID
+        par_list:  List of valid RESA2 PARAMETER_NAMES
+        year:      Int. Year of interest
+        engine:    SQL-Alchemy 'engine' object already connected to RESA2
+    
+    Returns:
+        Dataframe of annual loads
+    """
+    import pandas as pd
+    import numpy as np
+    
+    # Dict with factors for unit conversions
+    unit_dict = {'SPM':[1.E9, 'tonnes'],     # mg to tonnes
+                 'TOC':[1.E9, 'tonnes'],     # mg to tonnes
+                 'PO4-P':[1.E12, 'tonnes'],  # ug to tonnes
+                 'TOTP':[1.E12, 'tonnes'],   # ug to tonnes
+                 'NO3-N':[1.E12, 'tonnes'],  # ug to tonnes
+                 'NH4-N':[1.E12, 'tonnes'],  # ug to tonnes
+                 'TOTN':[1.E12, 'tonnes'],   # ug to tonnes
+                 'SiO2':[1.E9, 'tonnes'],    # mg to tonnes
+                 'Ag':[1.E12, 'tonnes'],     # ug to tonnes
+                 'As':[1.E12, 'tonnes'],     # ug to tonnes
+                 'Pb':[1.E12, 'tonnes'],     # ug to tonnes
+                 'Cd':[1.E12, 'tonnes'],     # ug to tonnes
+                 'Cu':[1.E12, 'tonnes'],     # ug to tonnes
+                 'Zn':[1.E12, 'tonnes'],     # ug to tonnes
+                 'Ni':[1.E12, 'tonnes'],     # ug to tonnes
+                 'Cr':[1.E12, 'tonnes'],     # ug to tonnes
+                 'Hg':[1.E12, 'kg']}         # ng to kg
+    
+    # Get water chem data
+    wc_df = extract_water_chem(stn_id, par_list, 
+                               '%s-01-01' % year,
+                               '%s-12-31' % year,
+                                engine, plot=False)
+    
+    # Get flow data
+    q_df = extract_discharge(stn_id, 
+                             '%s-01-01' % year, 
+                             '%s-12-31' % year,
+                             engine, plot=False)
+    
+    # Tidy dfs
+    wc_df.index.name = 'datetime'
+    wc_df['date'] = wc_df.index.date
+    wc_df.reset_index(inplace=True)    
+    q_df['date'] = q_df.index.date
+    
+    # Join on date
+    wc_df = pd.merge(wc_df, q_df, how='left', on='date')
+    
+    # Get list of chem cols
+    cols = wc_df.columns
+    par_unit_list = [i for i in cols if not i in ['datetime', 'date', 'flow_m3/s']]
+
+    # Calc intervals t_i
+    # Get sample dates
+    dates = list(wc_df['datetime'].values)
+
+    # Add st and end of year
+    dates.insert(0, np.datetime64('%s-01-01' % year))
+    dates.append(np.datetime64('%s-12-31' % year))
+    dates = np.array(dates)
+
+    # Calc differences in seconds between dates and divide by 2
+    secs = (np.diff(dates) / np.timedelta64(1, 's')) / 2.
+
+    # Add "before" and "after" intervals to df
+    wc_df['t_i'] = secs[1:] + secs[:-1]
+    
+    # Estimate loads
+    # Denominator
+    wc_df['Qi_ti'] = wc_df['flow_m3/s']*wc_df['t_i']
+    
+    # Numerator
+    for par in par_unit_list:
+        par_l = par.split('/')[0]
+        wc_df[par_l] = 1000*wc_df['flow_m3/s']*wc_df['t_i']*wc_df[par]
+    
+    # Flow totals
+    sum_df = wc_df.sum()
+    sigma_Qi_ti = sum_df['Qi_ti']                  # Denominator
+    sigma_q = (q_df['flow_m3/s']*60*60*24).sum()   # Q_r
+    
+    # Chem totals
+    data_dict = {}
+    for par in par_unit_list:
+        # Identify variable
+        par_l = par.split('/')[0]
+        var_name = par_l.split('_')[0]
+        
+        # Get unit and conv factor
+        conv_fac = unit_dict[var_name][0]
+        unit = unit_dict[var_name][1]
+        data_dict[var_name+'_'+unit] = (sigma_q*sum_df[par_l])/(conv_fac*sigma_Qi_ti)
+    
+    # Convert to df
+    l_df = pd.DataFrame(data_dict, index=[stn_id])
+    
+    return l_df
