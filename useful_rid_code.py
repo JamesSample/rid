@@ -375,3 +375,61 @@ def estimate_loads(stn_id, par_list, year, engine):
     l_df = pd.DataFrame(data_dict, index=[stn_id])
     
     return l_df
+
+def update_word_table(doc, value, tab_id=0, 
+                      row=None, col=None,
+                      row_idx=0, col_idx=0):
+    """ Modifies the value in the specified row and col of a Word
+        table. Note: Font, size and alignment are currently hard-
+        coded, but this could easily be modified.
+    
+    Args:
+        doc:      Open py-docx object
+        value:    New value for cell
+        tab_id:   Int. ID of table to modify
+        row:      Str. Label to identify row of interest
+        col:      Str. Label to identify col of interest
+        row_idx:  Int. Index of row in which column headings are defined
+        col_idx:  Int. Index of col in which row headings are defined
+    
+    Returns:
+        None. The doc object is modified in-place.
+    """
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH 
+    
+    # Get the first table
+    tab = doc.tables[tab_id]
+
+    # Extract text to index rows
+    row_dict = {}
+    for idx, cell in enumerate(tab.column_cells(col_idx)):
+        for paragraph in cell.paragraphs:
+            row_dict[paragraph.text] = idx 
+
+    # Extract text to index cols
+    col_dict = {}
+    for idx, cell in enumerate(tab.row_cells(row_idx)):
+        for paragraph in cell.paragraphs:
+            col_dict[paragraph.text] = idx 
+
+    # Get row and col indices
+    col = col_dict[col]
+    row = row_dict[row]
+
+    # Get cell
+    cell = tab.cell(row, col)
+
+    # Modify value
+    cell.text = value
+
+    # Set font and size
+    run = tab.cell(row, col).paragraphs[0].runs[0]
+    run.font.size = Pt(8)
+    run.font.name = 'Times New Roman'
+
+    # Align right
+    p = tab.cell(row, col).paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    return None
