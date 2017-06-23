@@ -8,6 +8,6 @@ The analysis for 2016/17 is documented in the following notebooks:
 
  1. **[Initial data exploration](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_data_exploration.ipynb)**. Getting to know the project and exploring the results from previous years
  
- 2. **[Updating discharge datasets](https://github.com/JamesSample/rid/blob/master/notebooks/update_flow_datasets.ipynb)**. Adding new observed and modelled flow datasets from [NVE](https://www.nve.no/)
+ 2. **[Updating discharge datasets](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/update_flow_datasets.ipynb)**. Adding new observed and modelled flow datasets from [NVE](https://www.nve.no/)
  
- 3. **[Summary tables in Microsoft Word](https://github.com/JamesSample/rid/blob/master/notebooks/word_data_tables.ipynb)**. Preparing key data tables for the report
+ 3. **[Summary tables in Microsoft Word](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/word_data_tables.ipynb)**. Preparing key data tables for the report
