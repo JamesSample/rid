@@ -644,9 +644,17 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine):
             for par_unit in par_unit_list:
                 # Get just the par
                 par = par_unit.split('_')[0]
-
+                
+                # Deal with flags
+                if par == 'Qs':
+                    value = df_row[par_unit]
+                elif df_row[par + '_flag'] == '<':
+                    value = '<' + str(df_row[par_unit])
+                else:
+                    value = df_row[par_unit]
+                    
                 # Update the table
-                update_cell(dt_tm, par, df_row[par_unit],
+                update_cell(dt_tm, par, value,
                             col_dict, row_dict, tab)
 
         print '    Writing summary statistics...'
