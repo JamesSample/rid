@@ -15,7 +15,8 @@
 
 def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
     """ Extracts time series for the specified station and parameters. Returns 
-        a dataframe and an interactive grid plot.
+        a dataframe of chemistry and LOD values, a dataframe of duplicates and,
+        optionally, an interactive grid plot.
 
     Args:
         stn_id:    Int. Valid RESA2 STATION_ID
@@ -27,8 +28,8 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
                    dataframe
 
     Returns:
-        If plot is False, returns a dataframe of water chemsitry, otherwise
-        returns a tuple (wc_df, figure object)
+        If plot is False, returns (chem_df, dup_df), otherwise
+        returns (chem_df, dup_df, fig_obj)
     """
     import matplotlib.pyplot as plt 
     import datetime as dt
@@ -110,12 +111,38 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
     # Convert units
     wc_df['value'] = wc_df['value'] * wc_df['conversion_factor']
     
-    # Combine name and unit columns
-    wc_df['variable'] = wc_df['name'] + '_' + wc_df['unit'].map(str)
-    
     # Extract columns of interest
-    wc_df = wc_df[['station_code', 'sample_date', 'name', 'unit', 'value']]
+    wc_df = wc_df[['station_code', 'sample_date', 'name', 'unit', 
+                   'value', 'flag1', 'entered_date_x']]
+
+    # Check for duplicates
+    dup_df = wc_df[wc_df.duplicated(subset=['station_code',
+                                            'sample_date',
+                                            'name'], 
+                                            keep=False)].sort_values(by=['station_code', 
+                                                                         'sample_date', 
+                                                                         'name'])
     
+    dup_df['station_code'] = dup_df['station_code'].str.decode('windows-1252')
+    
+    if len(dup_df) > 0:
+        print ('WARNING\nThe database contains duplicated values for some station-'
+               'date-parameter combinations.\nOnly the most recent values '
+               'will be used, but you should check the repeated values are not '
+               'errors.\nThe duplicated entries are returned in a separate '
+               'dataframe.\n')
+        
+        # Choose most recent record for each duplicate
+        wc_df.sort_values(by='entered_date_x', inplace=True, ascending=True)
+
+        # Drop duplicates
+        wc_df.drop_duplicates(subset=['station_code', 'sample_date', 'name'],
+                              keep='last', inplace=True)
+        
+        # Tidy
+        del wc_df['entered_date_x']               
+        wc_df.reset_index(inplace=True, drop=True)
+        
     if plot:
         # Get number of rows
         if (len(par_list) % 3) == 0:
@@ -175,14 +202,28 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
     # Restructure df
     wc_df['unit'] = wc_df['unit'].str.decode('windows-1252')
     wc_df['par'] = wc_df['name'] + '_' + wc_df['unit'].map(unicode)
+    wc_df['flag'] = wc_df['name'] + '_flag'
     del wc_df['station_code'], wc_df['name'], wc_df['unit']
 
-    wc_df = wc_df.pivot(index='sample_date', columns='par', values='value')
+    # DF of values
+    wc_val_df = wc_df[['sample_date', 'par', 'value']]
+    wc_val_df = wc_val_df.pivot(index='sample_date', columns='par', values='value')
+
+    # DF of LOD flags
+    wc_lod_df = wc_df[['sample_date', 'flag', 'flag1']]
+    wc_lod_df = wc_lod_df.pivot(index='sample_date', columns='flag', values='flag1')
+
+    # Join
+    wc_df = pd.merge(wc_val_df, wc_lod_df, how='left',
+                     left_index=True, right_index=True)
+    
+    # Sort
+    wc_df.sort_index(inplace=True, ascending=True)
     
     if plot:
-        return (wc_df, fig)
+        return (wc_df, dup_df, fig)
     else:
-        return wc_df
+        return (wc_df, dup_df)
 
 def extract_discharge(stn_id, st_dt, end_dt, engine, plot=False):
     """ Extracts daily flow time series for the selected site. Returns a 
@@ -257,6 +298,9 @@ def extract_discharge(stn_id, st_dt, end_dt, engine, plot=False):
     # Convert to daily
     q_df = q_df.resample('D').mean()
     
+    # Linear interpolation of NoData gaps
+    q_df.interpolate(method='linear', inplace=True)
+    
     # Plot
     if plot:
         ax = q_df.plot(legend=False, figsize=(12,5))
@@ -306,16 +350,46 @@ def estimate_loads(stn_id, par_list, year, engine):
                  'Hg':[1.E12, 'kg']}         # ng to kg
     
     # Get water chem data
-    wc_df = extract_water_chem(stn_id, par_list, 
-                               '%s-01-01' % year,
-                               '%s-12-31' % year,
-                                engine, plot=False)
+    wc_df, dup_df = extract_water_chem(stn_id, par_list, 
+                                       '%s-01-01' % year,
+                                       '%s-12-31' % year,
+                                       engine, plot=False)
     
     # Get flow data
     q_df = extract_discharge(stn_id, 
                              '%s-01-01' % year, 
                              '%s-12-31' % year,
                              engine, plot=False)
+    
+    # Adjust LOD values
+    # Get list of chem cols
+    cols = wc_df.columns
+    par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
+
+    # loop over cols
+    for par_unit in par_unit_list:
+        par = par_unit.split('_')[0]
+
+        # Get vals
+        val_df = wc_df[par_unit].values
+
+        # Get LOD flags
+        lod_df = wc_df[par+'_flag'].values
+
+        # Number of LOD values
+        n_lod = (lod_df == '<').sum()
+
+        # Prop <= LOD
+        p_lod = (100.*n_lod)/len(lod_df)
+
+        # Adjust ALL values
+        ad_val_df = (val_df / 100.)*(100. - p_lod)
+
+        # Update ONLY the LOD values
+        val_df[(lod_df=='<')] = ad_val_df[(lod_df=='<')]
+
+        # Update values in wc_df
+        wc_df[par_unit] = val_df
     
     # Tidy dfs
     wc_df.index.name = 'datetime'
@@ -326,10 +400,6 @@ def estimate_loads(stn_id, par_list, year, engine):
     # Join on date
     wc_df = pd.merge(wc_df, q_df, how='left', on='date')
     
-    # Get list of chem cols
-    cols = wc_df.columns
-    par_unit_list = [i for i in cols if not i in ['datetime', 'date', 'flow_m3/s']]
-
     # Calc intervals t_i
     # Get sample dates
     dates = list(wc_df['datetime'].values)
@@ -376,60 +446,274 @@ def estimate_loads(stn_id, par_list, year, engine):
     
     return l_df
 
-def update_word_table(doc, value, tab_id=0, 
-                      row=None, col=None,
-                      row_idx=0, col_idx=0):
-    """ Modifies the value in the specified row and col of a Word
-        table. Note: Font, size and alignment are currently hard-
-        coded, but this could easily be modified.
-    
+def remove_row(table, row):
+    """ Function to remove a row from a Word table. See:
+        https://groups.google.com/forum/#!topic/python-docx/aDumlNvK6GM
+        
     Args:
-        doc:      Open py-docx object
-        value:    New value for cell
-        tab_id:   Int. ID of table to modify
-        row:      Str. Label to identify row of interest
-        col:      Str. Label to identify col of interest
-        row_idx:  Int. Index of row in which column headings are defined
-        col_idx:  Int. Index of col in which row headings are defined
+        table: Table object
+        row:   Row object
     
     Returns:
-        None. The doc object is modified in-place.
+        None, The table object is modified in-place.
     """
-    from docx.shared import Pt
-    from docx.enum.text import WD_ALIGN_PARAGRAPH 
+    tbl = table._tbl
+    tr = row._tr
+    tbl.remove(tr)
     
-    # Get the first table
-    tab = doc.tables[tab_id]
-
-    # Extract text to index rows
-    row_dict = {}
-    for idx, cell in enumerate(tab.column_cells(col_idx)):
-        for paragraph in cell.paragraphs:
-            row_dict[paragraph.text] = idx 
-
-    # Extract text to index cols
-    col_dict = {}
-    for idx, cell in enumerate(tab.row_cells(row_idx)):
-        for paragraph in cell.paragraphs:
-            col_dict[paragraph.text] = idx 
-
+def update_cell(row_txt, par_txt, value,
+                col_dict, row_dict, tab):
+    """ Update a cell in a table specified by row and col names.
+    
+    Args:
+        row_txt:  Str. Label to identify row of interest
+        col_txt:  Str. Label to identify col of interest
+        value:    New value for cell
+        col_dict: Dict indexing columns
+        row_dict: Dict indexing rows
+        tab:      Table object 
+    
+    Returns:
+        None. The table object is modified in-place.
+    """
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
     # Get row and col indices
-    col = col_dict[col]
-    row = row_dict[row]
+    col = col_dict[par_txt]
+    row = row_dict[row_txt]
 
     # Get cell
     cell = tab.cell(row, col)
 
     # Modify value
-    cell.text = value
-
-    # Set font and size
-    run = tab.cell(row, col).paragraphs[0].runs[0]
-    run.font.size = Pt(8)
-    run.font.name = 'Times New Roman'
+    if isinstance(value, float) or isinstance(value, int):
+        cell.text = '%.2f' % value  
+    elif isinstance(value, str):
+        cell.text = value
+    else:
+        raise ValueError('Unexpected data type.')
 
     # Align right
     p = tab.cell(row, col).paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-    return None
+def write_word_water_chem_tables(stn_df, year, in_docx, engine):
+    """ Creates Word tables summarising flow and water chemistry data
+        for the RID_11 and RID_36 stations. Replaces Tore's 
+        NIVA.RESAEXTENSIONS Visual Studio project.
+    
+    Args:
+        stn_df:  Dataframe listing the 47 sites of interest. Must
+                 include [station_id, station_code, station_name]
+        year:    Int. Year of interest
+        in_docx: Str. Raw path to Word document. This should be a
+                 *COPY* of rid_water_chem_tables_template.docx. Do
+                 not use the original template as the files will be 
+                 modified
+        engine:  SQL-Alchemy 'engine' object already connected to RESA2
+        
+    Returns:
+        None. The specified Word document is modified and saved.
+    """
+    import pandas as pd
+    import numpy as np
+    from docx import Document
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    # Chem pars of interest
+    par_list = ['pH', 'KOND', 'TURB860', 'SPM', 'TOC', 'PO4-P', 
+                'TOTP', 'NO3-N', 'NH4-N', 'TOTN', 'SiO2', 'Ag', 
+                'As', 'Pb', 'Cd', 'Cu', 'Zn', 'Ni', 'Cr', 'Hg']
+
+    # Open the document
+    doc = Document(in_docx)
+
+    # Set styles for 'Normal' template in this doc
+    style = doc.styles['Normal']
+
+    font = style.font
+    font.name = 'Times New Roman'
+    font.size = Pt(8)
+
+    p_format = style.paragraph_format
+    p_format.space_before = Pt(0)
+    p_format.space_after = Pt(0)
+
+    # Loop over tables
+    for tab_id, tab in enumerate(doc.tables):
+        # Get station name
+        stn_name = tab.cell(0, 0).text
+
+        print 'Processing:', stn_name
+
+        # Get station ID
+        stn_id = stn_df.query('station_name == @stn_name')['station_id'].values[0]
+
+        print '    Extracting water chemistry data...'
+
+        # Get WC data
+        wc_df, dup_df  = extract_water_chem(stn_id, par_list, 
+                                            '%s-01-01' % year,
+                                            '%s-12-31' % year,
+                                            engine, plot=False)
+
+        # Get list of cols of interest for later
+        cols = wc_df.columns
+        par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
+        par_unit_list.append('Qs_m3/s')
+
+        # Add date col (ignoring time)
+        wc_df['date'] = wc_df.index.date
+
+        # Reset index
+        wc_df.reset_index(inplace=True)
+
+        print '    Extracting flow data...'
+
+        # Get flow data
+        q_df = extract_discharge(stn_id, 
+                                 '%s-01-01' % year,
+                                 '%s-12-31' % year,
+                                 engine, plot=False)
+
+        # Add date col (ignoring time)
+        q_df['date'] = q_df.index.date
+
+        # Join flows to chem
+        df = pd.merge(wc_df, q_df, how='left', on='date')
+
+        # Set index
+        df.index = df['sample_date']
+
+        # Tidy
+        df['Qs_m3/s'] = df['flow_m3/s']
+        del df['date'], df['flow_m3/s'], df['sample_date']
+        df.sort_index(inplace=True)
+
+        print '    Writing sample dates...'
+
+        # Write sample dates to first col
+        dates = df.index.values
+
+        for idx, dt in enumerate(dates):
+            # Get cell
+            cell = tab.cell(idx+3, 0) # Skip 3 rows of header
+
+            # Modify value
+            cell.text = pd.to_datetime(str(dt)).strftime('%d.%m.%Y %H:%M')
+
+            # Align right
+            p = tab.cell(idx+3, 0).paragraphs[0]
+            p.alignment = WD_ALIGN_PARAGRAPH.RIGHT 
+
+        print '    Deleting empty rows...'
+
+        # Delete empty rows (each blank table has space for 20 samples, but 
+        # usually there are fewer)
+        # Work out how many rows to delete
+        first_blank = len(dates)+3
+        n_blank = 23 - len(dates) - 3
+        blank_ids = [first_blank,]*n_blank # Delete first blank row n times 
+
+        for idx in blank_ids:
+            # Delete rows
+            row = tab.rows[idx]
+            remove_row(tab, row)     
+
+        print '    Writing data values...'
+
+        # Extract text to index rows
+        row_dict = {}
+        for idx, cell in enumerate(tab.column_cells(0)):
+            for paragraph in cell.paragraphs:
+                row_dict[paragraph.text] = idx 
+
+        # Extract text to index cols
+        col_dict = {}
+        for idx, cell in enumerate(tab.row_cells(1)):
+            for paragraph in cell.paragraphs:
+                col_dict[paragraph.text] = idx 
+
+        # Loop over df cols
+        for idx, df_row in df.iterrows():
+            # Get the date
+            dt_tm = idx.strftime('%d.%m.%Y %H:%M')
+
+            # Loop over variables
+            for par_unit in par_unit_list:
+                # Get just the par
+                par = par_unit.split('_')[0]
+
+                # Update the table
+                update_cell(dt_tm, par, df_row[par_unit],
+                            col_dict, row_dict, tab)
+
+        print '    Writing summary statistics...'
+
+        # Add flag col (all None) for Qs
+        df['Qs_flag'] = None
+
+        # Loop over cols
+        for df_col in par_unit_list:
+            # Get just the par
+            par = df_col.split('_')[0]
+
+            # Calc statistics
+            # 1. Lower av. - assume all LOD values are 0
+            # Get vals
+            val_df = df[df_col].values
+
+            # Get LOD flags
+            lod_df = df[par+'_flag'].values
+
+            # Update ONLY the LOD values
+            val_df[(lod_df=='<')] = 0
+
+            # Average
+            lo_av = val_df.mean()
+            update_cell('Lower avg.', par, lo_av,
+                        col_dict, row_dict, tab)   
+
+            # 2. Upper av. - assume all LOD values are LOD
+            up_av = df[df_col].mean()
+            update_cell('Upper avg..', par, up_av,
+                        col_dict, row_dict, tab)
+
+            # 3. Min
+            par_min = df[df_col].min()
+            update_cell('Minimum', par, par_min,
+                        col_dict, row_dict, tab)
+
+            # 4. Max
+            par_max = df[df_col].max()
+            update_cell('Maximum', par, par_max,
+                        col_dict, row_dict, tab)
+
+            # 5. More than 70% above LOD?
+            lod_df = df[par+'_flag'].values
+            pct_lod = (100.*(lod_df=='<').sum())/len(lod_df) # % at or below LOD
+            pct_lod = 100 - pct_lod                          # % above LOD
+            if pct_lod > 70:
+                lod_gt_70 = 'yes'
+            else:
+                lod_gt_70 = 'no'
+            update_cell('More than 70%LOD', par, lod_gt_70,
+                        col_dict, row_dict, tab)
+
+            # 6. n samples
+            n_samps = len(df[[df_col]].dropna(how='any'))
+            update_cell('n', par, n_samps,
+                        col_dict, row_dict, tab)
+
+            # 7. Std. Dev.
+            par_std = df[df_col].std() 
+            update_cell('St.dev', par, par_std,
+                        col_dict, row_dict, tab)
+
+        print '    Done.'
+
+        # Save after each table
+        doc.save(in_docx)
+
+    print 'Finished.'
