@@ -670,7 +670,7 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine):
             # Calc statistics
             # 1. Lower av. - assume all LOD values are 0
             # Get vals
-            val_df = df[df_col].values
+            val_df = df[df_col].values.copy()
 
             # Get LOD flags
             lod_df = df[par+'_flag'].values
