@@ -1,3 +1,4 @@
+# This Python file uses the following encoding: utf-8
 #------------------------------------------------------------------------------
 # Name:        useful_rid_code.py
 # Purpose:     Functions for updated RID analysis.
@@ -61,13 +62,16 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
     assert len(par_df) == len(par_list), 'One or more parameters not found.'
     
     # Get results for ALL pars for sites and period of interest
+    # Only get values that are "approved" by lab
     sql = ("SELECT * FROM resa2.water_chemistry_values2 "
-           "WHERE sample_id IN (SELECT water_sample_id FROM resa2.water_samples "
-           "WHERE station_id = %s "
-           "AND sample_date <= DATE '%s' "
-           "AND sample_date >= DATE '%s')" % (stn_df['station_id'].iloc[0],
-                                              end_dt,
-                                              st_dt))    
+           "WHERE sample_id IN ( "
+           "  SELECT water_sample_id FROM resa2.water_samples "
+           "  WHERE station_id = %s "
+           "  AND sample_date <= DATE '%s' "
+           "  AND sample_date >= DATE '%s') "
+           "AND approved = 'YES'" % (stn_df['station_id'].iloc[0],
+                                     end_dt,
+                                     st_dt))    
 
     wc_df = pd.read_sql_query(sql, engine)
     
@@ -433,7 +437,7 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True):
         
         # Adjust LOD values
         wc_df = adjust_lod_values(wc_df)
-
+        
         # Get list of chem cols
         cols = wc_df.columns
         par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
@@ -463,14 +467,25 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True):
 
             # Add st and end of year
             dates.insert(0, np.datetime64('%s-01-01' % year))
-            dates.append(np.datetime64('%s-12-31' % year))
+            dates.append(np.datetime64('%s-01-01' % (year+1))) # Assumes time = midnight
             dates = np.array(dates)
 
             # Calc differences in seconds between dates and divide by 2
             secs = (np.diff(dates) / np.timedelta64(1, 's')) / 2.
 
             # Add "before" and "after" intervals to df
-            par_df['t_i'] = secs[1:] + secs[:-1]
+            t_wts = secs[1:] + secs[:-1]
+            
+            # The first sample covers the entire period from the start of the 
+            # year to the sampling date (not from halfway through the period 
+            # like the rest. The same is true for the last sample to the year 
+            # end 
+            # => add half a period to start and end
+            t_wts[0] = t_wts[0] + secs[0]
+            t_wts[-1] = t_wts[-1] + secs[-1]
+            
+            # Add to df
+            par_df['t_i'] = t_wts
 
             # Estimate loads
             # Denominator
@@ -560,7 +575,7 @@ def estimate_missing_data(wc_df, stn_id, par_list, year, engine):
             if len(par_ts) > 0:
                 # Adjust LOD values
                 par_ts = adjust_lod_values(par_ts)
-
+            
                 # Calculate annual means
                 par_ts = par_ts.resample('A').mean()
                 par_ts.dropna(how='any', inplace=True)
@@ -590,10 +605,10 @@ def estimate_missing_data(wc_df, stn_id, par_list, year, engine):
                     if (lo < 0) and (hi > 0):
                         slp = 0
                         incpt = par_ts.median().values[0]
-         
+                   
                     # Estimate conc
                     conc = slp*pred_yr + incpt
-
+                   
                     # Set negative values to 0
                     if conc < 0:
                         conc = 0
@@ -891,5 +906,120 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine):
 
         # Save after each table
         doc.save(in_docx)
+
+    print 'Finished.'
+    
+def write_word_loads_table(stn_df, loads_csv, in_docx, engine):
+    """ Creates Word table summarising annual loads for the 155 main
+        RID sites (RID_11 + RID_36 + RID_108). Note: the year is 
+        automatically extracted from the file name of loads_csv, which
+        is created as an output from the "loads notebook".
+    
+    Args:
+        stn_df:    Dataframe listing the 155 sites of interest. Must
+                   include [station_id, station_code, station_name]
+        loads_csv: Str. Raw path to CSV summarising loads, as generated 
+                   by "loads notebook"
+        in_docx:   Str. Raw path to Word document. This should be a
+                   *COPY* of rid_loads_by_river_template.docx. Do not
+                   use the original template as the file will be 
+                   modified
+        engine:    SQL-Alchemy 'engine' object already connected to 
+                   RESA2
+        
+    Returns:
+        None. The specified Word document is modified and saved.
+    """
+    import pandas as pd
+    import numpy as np
+    import os
+    from docx import Document
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    # Get year from loads_csv
+    year = int(os.path.split(loads_csv)[1].split('_')[-1][:-4])
+
+    # Read loads data
+    lds_df = pd.read_csv(loads_csv, index_col=0)
+    
+    # Chem pars of interest
+    par_list = ['SPM', 'TOC', 'PO4-P', 'TOTP', 'NO3-N', 'NH4-N', 
+                'TOTN', 'SiO2', 'Ag', 'As', 'Pb', 'Cd', 'Cu',
+                'Zn', 'Ni', 'Cr', 'Hg']
+
+    # Open the Word document
+    doc = Document(in_docx)
+
+    # Set styles for 'Normal' template in this doc
+    style = doc.styles['Normal']
+
+    font = style.font
+    font.name = 'Times New Roman'
+    font.size = Pt(8)
+
+    p_format = style.paragraph_format
+    p_format.space_before = Pt(0)
+    p_format.space_after = Pt(0)
+
+    # Get table obj
+    tab = doc.tables[0]
+
+    # Extract text to index rows
+    row_dict = {}
+    for idx, cell in enumerate(tab.column_cells(0)):
+        for paragraph in cell.paragraphs:
+            row_dict[paragraph.text] = idx 
+
+    # Extract text to index cols
+    col_dict = {}
+    for idx, cell in enumerate(tab.row_cells(0)):
+        for paragraph in cell.paragraphs:
+            col_dict[paragraph.text] = idx 
+
+    # Loop over sites
+    print 'Processing:'
+    for stn_id in stn_df['station_id']:
+        # Get name and code
+        name = stn_df.query('station_id == @stn_id')['station_name'].values[0]
+        code = stn_df.query('station_id == @stn_id')['station_code'].values[0]
+
+        print '    %s (%s)...' % (name, code)
+        
+        # Allow for sites with the same name
+        if name in [u'Børselva', u'Oselva']:
+            name = '%s (%s)' % (name, code)
+
+        # Get flow data
+        q_df = extract_discharge(stn_id, 
+                                 '%s-01-01' % year,
+                                 '%s-12-31' % year,
+                                 engine, plot=False)
+
+        # Average daily flow vol in 1000s m3/day
+        q_av = q_df.mean()['flow_m3/s']
+        v_av = q_av*24*60*60 / 1000
+
+        # Update the table with flow
+        update_cell(name, 'Flow rate', v_av,
+                    col_dict, row_dict, tab)
+
+        # Loop over chem pars
+        for par in par_list:
+            # Get col for loads df
+            if par == 'Hg':
+                par_l = 'Hg_kg'
+            else:
+                par_l = par + '_tonnes'
+
+            # Get load value
+            load = lds_df.ix[stn_id, par_l]
+
+            # Update table
+            update_cell(name, par, load,
+                        col_dict, row_dict, tab)
+
+    # Save after each table
+    doc.save(in_docx)
 
     print 'Finished.'
