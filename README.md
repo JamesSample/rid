@@ -10,6 +10,6 @@ The analysis for 2016/17 is documented in the following notebooks:
  
  2. **[Updating discharge datasets](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/update_flow_datasets.ipynb)**. Adding new observed and modelled flow datasets from [NVE](https://www.nve.no/)
  
- 3. **[Estimating loads for 155 "monitored locations"](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/estimate_loads.ipynb)**. 155 sites in the Norwegian component of the programme have at least some water chemistry measurements. This notebook estimates pollutant loads for these locations, using a combination of observed flows & discharges, modelled flows and regression analysis. Results for 2015 are estimated using the new code and compared to those reported previously
+ 3. **[Estimating loads "monitored locations"](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/estimate_loads.ipynb)**. 155 sites in the Norwegian component of the programme have at least some water chemistry measurements. This notebook estimates pollutant loads for these locations, using a combination of observed flows & discharges, modelled flows and regression analysis. Results for 2015 are estimated using the new code and compared to those reported previously
  
  4. **[Summary tables in Microsoft Word](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/word_data_tables.ipynb)**. Preparing key data tables for the report
