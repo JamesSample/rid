@@ -126,10 +126,10 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
     dup_df['station_code'] = dup_df['station_code'].str.decode('windows-1252')
     
     if len(dup_df) > 0:
-        print ('WARNING\nThe database contains duplicated values for some station-'
-               'date-parameter combinations.\nOnly the most recent values '
+        print ('    WARNING\n    The database contains duplicated values for some station-'
+               'date-parameter combinations.\n    Only the most recent values '
                'will be used, but you should check the repeated values are not '
-               'errors.\nThe duplicated entries are returned in a separate '
+               'errors.\n    The duplicated entries are returned in a separate '
                'dataframe.\n')
         
         # Choose most recent record for each duplicate
@@ -314,18 +314,75 @@ def extract_discharge(stn_id, st_dt, end_dt, engine, plot=False):
     
     else:    
         return q_df
+
+def adjust_lod_values(wc_df):
+    """ Adjusts LOD values according to the OSPAR methodology.
     
-def estimate_loads(stn_id, par_list, year, engine):
+    Args:
+        wc_df: Dataframe in format returned by rid.extract_water_chem
+    
+    Returns:
+        Modified dataframe
+    """
+    import pandas as pd
+    
+    # Get list of chem cols
+    cols = wc_df.columns
+    par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
+
+    # loop over cols
+    for par_unit in par_unit_list:
+        par = par_unit.split('_')[0]
+        
+        # Get just records for this par
+        par_df = wc_df[[par_unit, par+'_flag']].copy()
+        par_df.dropna(subset=[par_unit], inplace=True)
+
+        # Get vals
+        val_df = par_df[par_unit].values
+
+        # Get LOD flags
+        lod_df = par_df[par+'_flag'].values
+
+        # Number of LOD values
+        n_lod = (lod_df == '<').sum()
+
+        # Prop <= LOD
+        p_lod = (100.*n_lod)/len(lod_df)
+
+        # Adjust ALL values
+        ad_val_df = (val_df / 100.)*(100. - p_lod)
+
+        # Update ONLY the LOD values
+        val_df[(lod_df=='<')] = ad_val_df[(lod_df=='<')]
+
+        # Update values in wc_df
+        par_df[par_unit] = val_df  
+        
+        # Update values in wc_df
+        del wc_df[par_unit]
+        wc_df = pd.concat([wc_df, par_df[[par_unit]]], axis=1)
+
+    return wc_df
+    
+def estimate_loads(stn_id, par_list, year, engine, infer_missing=True):
     """ Estimates annual pollutant loads for specified site and year.
         
     Args:
-        stn_id:    Int. Valid RESA2 STATION_ID
-        par_list:  List of valid RESA2 PARAMETER_NAMES
-        year:      Int. Year of interest
-        engine:    SQL-Alchemy 'engine' object already connected to RESA2
+        stn_id:        Int. Valid RESA2 STATION_ID
+        par_list:      List of valid RESA2 PARAMETER_NAMES
+        year:          Int. Year of interest
+        engine:        SQL-Alchemy 'engine' object already connected to 
+                       RESA2
+        infer_missing: Whether to estimate data for missing years using
+                       simple regression (see notebook for full details)
     
     Returns:
-        Dataframe of annual loads
+        Dataframe of annual loads. If infer_missing=True, '_Est' columns
+        are included for each parameter specifying whether the reported
+        value is directly based on observations or inferred from 
+        regression. If infer_missing=False, these '_Est' columns are
+        omitted.
     """
     import pandas as pd
     import numpy as np
@@ -354,98 +411,209 @@ def estimate_loads(stn_id, par_list, year, engine):
                                        '%s-01-01' % year,
                                        '%s-12-31' % year,
                                        engine, plot=False)
-    
-    # Get flow data
-    q_df = extract_discharge(stn_id, 
-                             '%s-01-01' % year, 
-                             '%s-12-31' % year,
-                             engine, plot=False)
-    
-    # Adjust LOD values
-    # Get list of chem cols
-    cols = wc_df.columns
-    par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
 
-    # loop over cols
-    for par_unit in par_unit_list:
-        par = par_unit.split('_')[0]
-
-        # Get vals
-        val_df = wc_df[par_unit].values
-
-        # Get LOD flags
-        lod_df = wc_df[par+'_flag'].values
-
-        # Number of LOD values
-        n_lod = (lod_df == '<').sum()
-
-        # Prop <= LOD
-        p_lod = (100.*n_lod)/len(lod_df)
-
-        # Adjust ALL values
-        ad_val_df = (val_df / 100.)*(100. - p_lod)
-
-        # Update ONLY the LOD values
-        val_df[(lod_df=='<')] = ad_val_df[(lod_df=='<')]
-
-        # Update values in wc_df
-        wc_df[par_unit] = val_df
-    
-    # Tidy dfs
-    wc_df.index.name = 'datetime'
-    wc_df['date'] = wc_df.index.date
-    wc_df.reset_index(inplace=True)    
-    q_df['date'] = q_df.index.date
-    
-    # Join on date
-    wc_df = pd.merge(wc_df, q_df, how='left', on='date')
-    
-    # Calc intervals t_i
-    # Get sample dates
-    dates = list(wc_df['datetime'].values)
-
-    # Add st and end of year
-    dates.insert(0, np.datetime64('%s-01-01' % year))
-    dates.append(np.datetime64('%s-12-31' % year))
-    dates = np.array(dates)
-
-    # Calc differences in seconds between dates and divide by 2
-    secs = (np.diff(dates) / np.timedelta64(1, 's')) / 2.
-
-    # Add "before" and "after" intervals to df
-    wc_df['t_i'] = secs[1:] + secs[:-1]
-    
-    # Estimate loads
-    # Denominator
-    wc_df['Qi_ti'] = wc_df['flow_m3/s']*wc_df['t_i']
-    
-    # Numerator
-    for par in par_unit_list:
-        par_l = par.split('/')[0]
-        wc_df[par_l] = 1000*wc_df['flow_m3/s']*wc_df['t_i']*wc_df[par]
-    
-    # Flow totals
-    sum_df = wc_df.sum()
-    sigma_Qi_ti = sum_df['Qi_ti']                  # Denominator
-    sigma_q = (q_df['flow_m3/s']*60*60*24).sum()   # Q_r
-    
-    # Chem totals
-    data_dict = {}
-    for par in par_unit_list:
-        # Identify variable
-        par_l = par.split('/')[0]
-        var_name = par_l.split('_')[0]
+    # Estimate missing values
+    if infer_missing:
+        wc_df = estimate_missing_data(wc_df, stn_id, par_list, 
+                                      year, engine)
+           
+    if len(wc_df) > 0:
+        # Get flow data
+        q_df = extract_discharge(stn_id, 
+                                 '%s-01-01' % year, 
+                                 '%s-12-31' % year,
+                                 engine, plot=False)
+        q_df['date'] = q_df.index.date
         
-        # Get unit and conv factor
-        conv_fac = unit_dict[var_name][0]
-        unit = unit_dict[var_name][1]
-        data_dict[var_name+'_'+unit] = (sigma_q*sum_df[par_l])/(conv_fac*sigma_Qi_ti)
-    
-    # Convert to df
-    l_df = pd.DataFrame(data_dict, index=[stn_id])
-    
-    return l_df
+        # Total annual flow (Qr)
+        sigma_q = q_df['flow_m3/s'].sum()*60*60*24
 
+        # Dict for data
+        data_dict = {}
+        
+        # Adjust LOD values
+        wc_df = adjust_lod_values(wc_df)
+
+        # Get list of chem cols
+        cols = wc_df.columns
+        par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
+        
+        # Loop over cols
+        for par_unit in par_unit_list:
+            # Get whether estimated or observed
+            if len(par_unit.split('(')) > 1:
+                est = 1
+            else:
+                est = 0
+                
+            # Get data for this par and drop any missing
+            par_df = wc_df[[par_unit]].dropna()  
+
+            # Tidy 
+            par_df.index.name = 'datetime'
+            par_df['date'] = par_df.index.date
+            par_df.reset_index(inplace=True)        
+
+            # Join on date
+            par_df = pd.merge(par_df, q_df, how='left', on='date')
+
+            # Calc intervals t_i
+            # Get sample dates
+            dates = list(par_df['datetime'].values)
+
+            # Add st and end of year
+            dates.insert(0, np.datetime64('%s-01-01' % year))
+            dates.append(np.datetime64('%s-12-31' % year))
+            dates = np.array(dates)
+
+            # Calc differences in seconds between dates and divide by 2
+            secs = (np.diff(dates) / np.timedelta64(1, 's')) / 2.
+
+            # Add "before" and "after" intervals to df
+            par_df['t_i'] = secs[1:] + secs[:-1]
+
+            # Estimate loads
+            # Denominator
+            par_df['Qi_ti'] = par_df['flow_m3/s']*par_df['t_i']
+
+            # Numerator
+            par_l = par_unit.split('/')[0]
+            par_df[par_l] = 1000*par_df['flow_m3/s']*par_df['t_i']*par_df[par_unit]
+
+            # Flow totals
+            sum_df = par_df.sum()
+            sigma_Qi_ti = sum_df['Qi_ti'] # Denominator
+
+            # Chem totals
+            var_name = par_l.split('_')[0]
+
+            # Get unit and conv factor
+            conv_fac = unit_dict[var_name][0]
+            unit = unit_dict[var_name][1]
+            data_dict[var_name+'_'+unit] = (sigma_q*sum_df[par_l])/(conv_fac*sigma_Qi_ti)
+            
+            # Add estimated flag
+            data_dict[var_name+'_Est'] = est
+
+        # Convert to df
+        l_df = pd.DataFrame(data_dict, index=[stn_id])
+        
+        # Only need "Est" cols if infer_missing=True. Otherwise, just return loads
+        if not infer_missing:
+            cols = [i for i in l_df.columns if i.split('_')[1] != 'Est']
+            l_df = l_df[cols]            
+
+        return l_df
+
+def estimate_missing_data(wc_df, stn_id, par_list, year, engine):
+    """ If observations are not available for the station-parameter(s)-year
+        specified, this function will impute values using approximately the
+        methodology coded previously by Tore. See RESA2 procedures
+        CALCULATE_RID_STATISTICS and FIXNON109 for Tore's code.
+       
+    Args:
+        wc_df:    Dataframe of real observations for the specified
+                  station-par_list-year, as returned by extract_water_chem
+        stn_id:   Int. Valid RESA2 station ID
+        par_list: List of RESA2 parameters of interest
+        year:     Int. Year of interest
+        engine:   SQL-Alchemy 'engine' object already connected to RESA2
+    
+    Returns:
+        Modifed version of wc_df, with estimated values for any missing
+        parameters in the specified years
+    """
+    import pandas as pd
+    import numpy as np
+    import datetime as dt
+    from scipy import stats
+
+    # Work out which pars have no data i.e. difference between cols with data
+    # and cols requested originally
+    mis_par_list = list(set(par_list) - 
+                        set([i.split('_')[0] for i in wc_df.columns]))
+
+    # Are some data missing?
+    if len(mis_par_list) > 0: 
+        # Get all the data from 1990 to the (current_year - 1)
+        wc_ts, dup_ts = extract_water_chem(stn_id, mis_par_list, 
+                                           '1990-01-01',
+                                           '%s-12-31' % (dt.datetime.now().year - 1),
+                                           engine, plot=False)
+
+        # Dict to store estimated values
+        est_dict = {}
+
+        # Get list of chem cols with data over longer term
+        cols = wc_ts.columns
+        par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']  
+
+        # Loop over cols
+        for par_unit in par_unit_list:
+            # Process col headings
+            par = par_unit.split('_')[0]
+            
+            # Get data for this par
+            par_ts = wc_ts[[par_unit, par + '_flag']]
+
+            # Check if data for this par
+            if len(par_ts) > 0:
+                # Adjust LOD values
+                par_ts = adjust_lod_values(par_ts)
+
+                # Calculate annual means
+                par_ts = par_ts.resample('A').mean()
+                par_ts.dropna(how='any', inplace=True)
+
+                # If at least 3 years of data, use Sen's slope
+                # to estimate missing values
+                if len(par_ts) > 2:
+                    # Get first and last years with data
+                    first_yr = par_ts.index[0].year
+                    last_yr = par_ts.index[-1].year
+
+                    # Determine year on which predictions should be based
+                    # (see notebook text for details)
+                    if year < first_yr:
+                        pred_yr = first_yr
+                    elif year > last_yr:
+                        pred_yr = last_yr 
+                    else:
+                        pred_yr = year
+
+                    # Theil slopes with 95% CI on slope
+                    slp, incpt, lo, hi = stats.theilslopes(par_ts.values[:,0],
+                                                           par_ts.index.year)
+
+                    # If slope significant at p < 0.05, use equn to estimate
+                    # unknown year, else use long-term annual median
+                    if (lo < 0) and (hi > 0):
+                        slp = 0
+                        incpt = par_ts.median().values[0]
+         
+                    # Estimate conc
+                    conc = slp*pred_yr + incpt
+
+                    # Set negative values to 0
+                    if conc < 0:
+                        conc = 0
+                    
+                # Otherwise use median of whatever data we have
+                else:
+                    conc = par_ts.median().values[0]
+
+                # Add to dict
+                est_dict[par_unit+'(est)'] = conc
+                est_dict[par + '_flag'] = None
+
+        # Create df
+        est_df = pd.DataFrame(est_dict, index=[pd.to_datetime('%s-06-30' % year)])
+
+        # Append estimate values to wc_df
+        wc_df = pd.concat([wc_df, est_df], axis=1)
+
+    return wc_df
+    
 def remove_row(table, row):
     """ Function to remove a row from a Word table. See:
         https://groups.google.com/forum/#!topic/python-docx/aDumlNvK6GM
