@@ -408,7 +408,9 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True):
                  'Zn':[1.E12, 'tonnes'],     # ug to tonnes
                  'Ni':[1.E12, 'tonnes'],     # ug to tonnes
                  'Cr':[1.E12, 'tonnes'],     # ug to tonnes
-                 'Hg':[1.E12, 'kg']}         # ng to kg
+                 'Hg':[1.E12, 'kg'],         # ng to kg
+                 'HCHG':[1.E15, 'tonnes'],   # ng to tonnes
+                 'SUMPCB':[1.E15, 'tonnes']} # ng to tonnes
     
     # Get water chem data
     wc_df, dup_df = extract_water_chem(stn_id, par_list, 
@@ -1023,3 +1025,607 @@ def write_word_loads_table(stn_df, loads_csv, in_docx, engine):
     doc.save(in_docx)
 
     print 'Finished.'
+    
+def identify_point_in_polygon(pt_df, 
+                              poly_shp, 
+                              pt_col='ANLEGGSNR', 
+                              poly_col='VASSDRAGNR', 
+                              lat_col='Lat',
+                              lon_col='Lon'):
+    """ Performs spatial join to identify containing polygon IDs for points
+        with lat/lon co-ordinates.
+        
+    Args:
+        pt_df:    Dataframe of point locations. Must include a unique site 
+                  ID and cols containing lat and lon in WGS84 decimal degrees
+        poly_shp: Str. Raw path to polygon shapefile. Also in WGS84 geographic
+                  co-ordinates
+        pt_col:   Str. Name of col with unique point IDs
+        poly_col: Str. Name of col with unique polygon IDs
+        lat_col:  Str. Name of lat col for points
+        lon_col:  Str. Name of lon col for points
+    
+    Returns:
+        Dataframe with "poly_col" column added specifying polygon ID.
+    """
+    import pandas as pd
+    import geopandas as gpd
+    import geopandas.tools
+    import pyproj
+    import numpy as np
+    from shapely.geometry import Point
+    
+    # Get just the spatial info and site IDs
+    pt_df2 = pt_df[[pt_col, lat_col, lon_col]].copy()
+
+    # Drop any rows without lat/lon from df
+    # NOTE: Ideally, these should have been corrected above!
+    if pt_df2.isnull().values.any():
+        print ('WARNING: Not all sites have complete co-ordinate information. '
+               'These rows will be dropped.')
+        pt_df2.dropna(how='any', inplace=True)
+        
+    # Reset index (otherwise GPD join doesn't work)
+    pt_df2.reset_index(inplace=True, drop=True) 
+
+    # Create the geometry column from point coordinates
+    pt_df2['geometry'] = pt_df2.apply(lambda row: Point(row[lon_col], 
+                                                        row[lat_col]), axis=1)
+
+    # Convert to GeoDataFrame
+    pt_df2 = gpd.GeoDataFrame(pt_df2, geometry='geometry')
+    del pt_df2[lat_col], pt_df2[lon_col]
+
+    # Set coordinate system as WGS84
+    pt_df2.crs = {"init": "epsg:4326"}
+
+    # Load Regine catchment shapefile (projected to WGS84)
+    reg_gdf = gpd.GeoDataFrame.from_file(poly_shp)
+
+    # Get cols of interest
+    reg_gdf = reg_gdf[[poly_col, 'geometry']]
+
+    # Some vassdragsnummers are duplicated
+    reg_gdf.drop_duplicates(subset=[poly_col], inplace=True)
+    
+    # Spatial join
+    join_gdf = gpd.tools.sjoin(pt_df2, reg_gdf,
+                               how='left', op='within')
+
+    # Join output back to original data table
+    reg_gdf = join_gdf[[pt_col, poly_col]]
+    res_df = pd.merge(pt_df, reg_gdf, how='left', on=pt_col)
+
+    return res_df
+
+def utm_to_wgs84_dd(utm_df, zone, east, north):
+    """ Converts UTM co-ordinates to WGS84 decimal degrees.
+    
+    Args:
+        utm_df: Dataframe containing UTM co-ords
+        zone:   Str. Column defining UTM zone
+        east:   Str. Column defining UTM Easting
+        north:  Str. Column defining UTM Northing
+        
+    Returns:
+        Copy of utm_df with 'lat' and 'lon' columns added.
+    """
+    import pandas as pd
+    import numpy as np
+    import pyproj        
+    
+    # Copy utm_df
+    df = utm_df.copy()
+    
+    # Containers for data
+    lats = []
+    lons = []
+
+    # Loop over df
+    for idx, row in df.iterrows():
+        # Only convert if UTM co-ords are available
+        if pd.isnull(row[zone]):
+            lats.append(np.nan)
+            lons.append(np.nan)    
+        else:    
+            # Build projection
+            p = pyproj.Proj(proj='utm', zone=row[zone], ellps='WGS84')
+
+            # Convert
+            lon, lat = p(row[east], row[north], inverse=True)
+            lats.append(lat)
+            lons.append(lon)
+
+    # Add to df
+    df['lat'] = lats
+    df['lon'] = lons
+    
+    return df
+
+def write_teotil_point_source_input_file(out_fold, ts_id,
+                                         year, typ, engine):
+    """ Writes a text file for input to TEOTIL based on data
+        in the RESA2.RID_KILDER_TIMESERIES table.
+    
+    Args:
+        out_fold: Str. Path to folder for output .txt file
+        ts_id:    Int. Valid TIMESERIES_ID defined in
+                  RESA2.RID_TIMESERIES_DEFINITIONS
+        year:     Int. Year of interest
+        typ:      One of ['RENSEANLEGG', 'SPREDT', 'INDUSTRI',
+                  'AKVAKULTUR']
+        engine:   SQL-Alchemy 'engine' object already connected to 
+                  RESA2
+    
+    Returns:
+        None. The text file is written to the specified folder.
+    """
+    import pandas as pd
+    import os
+    
+    assert typ in ['RENSEANLEGG', 'SPREDT', 
+                   'INDUSTRI', 'AKVAKULTUR'], '"typ" not valid.'
+    
+    # Get data from RESA2.RID_KILDER_TIMESERIES
+    sql = ("SELECT id, regine, parameter_id, xvalue "
+           "FROM resa2.rid_kilder_timeseries "
+           "WHERE timeseries_id = %s "
+           "AND type = '%s' "
+           "AND year = %s "
+           "ORDER BY id" % (ts_id, typ, year))
+
+    val_df = pd.read_sql_query(sql, engine)
+
+    # Get data for pars
+    sql = ("SELECT DISTINCT out_pid, name, unit "
+           "FROM resa2.rid_punktkilder_outpar_def")
+
+    par_df = pd.read_sql_query(sql, engine)
+
+    # Pivot to 'wide' format; pad with zeros; tidy
+    val_df.set_index(['id', 'regine', 'parameter_id'], inplace=True)
+    val_df = val_df.unstack(level=-1, fill_value=0)
+    val_df.columns = val_df.columns.droplevel(0)
+    val_df.reset_index(inplace=True)
+    val_df.columns.name = ''
+
+    # Add year col
+    val_df['year'] = year
+
+    # Add blank cols for any missing pars
+    for pid in par_df['out_pid'].values:
+        if not pid in val_df.columns:
+            val_df[pid] = 0
+
+    # Reorder cols
+    val_df = val_df[['id', 'regine', 'year'] + list(par_df['out_pid'].values)]
+
+    # Rename cols
+    val_df.columns = ['ID', 'REGINE', 'YEAR'] + list(par_df['name'].values)
+
+    # Build custom headers for TEOTIL
+    # 1st row
+    row1_txt = '!Dette er en automatisk generert fil. Dato:%s' % pd.to_datetime('now')
+    row1 = [row1_txt] + (len(val_df.columns) - 1)*['',]
+
+    # 2nd row
+    row2 = (['!ID', 'REGINE', 'YEAR'] + 
+            ['%s(%s)' % (par, par_df['unit'].values[idx]) 
+             for idx, par in enumerate(par_df['name'].values)])
+
+    # 3rd row
+    row3 = val_df.columns
+
+    # Assign header as multi-index
+    val_df.columns = pd.MultiIndex.from_tuples(zip(row1, row2, row3))
+    
+    # Write output
+    out_path = os.path.join(out_fold, '%s.txt' % typ)
+    val_df.to_csv(out_path, sep=';', index=False, encoding='utf-8')
+    
+def write_teotil_discharge_input_file(out_fold, year, engine):
+    """ Writes a text file for input to TEOTIL based on data
+        in the RESA2.DISCHARGE_VALUES table.
+    
+    Args:
+        out_fold: Str. Path to folder for output .txt file
+        year:     Int. Year of interest
+        engine:   SQL-Alchemy 'engine' object already connected to 
+                  RESA2
+    
+    Returns:
+        None. The text file is written to the specified folder.
+    """
+    import pandas as pd
+    import os
+
+    # Get NVE stn IDs
+    sql = ("SELECT dis_station_id, TO_NUMBER(nve_serienummer) as Vassdrag "
+           "FROM resa2.discharge_stations "
+           "WHERE dis_station_name LIKE 'NVE Modellert%'")
+
+    nve_stn_df = pd.read_sql_query(sql, engine)
+    nve_stn_df.index = nve_stn_df['dis_station_id']
+    del nve_stn_df['dis_station_id']
+
+    # Get avg. annual values for NVE stns
+    sql = ("SELECT dis_station_id, ROUND(AVG(xvalue), 6) AS QAr "
+           "FROM resa2.discharge_values "
+           "WHERE dis_station_id in ( "
+           "  SELECT dis_station_id "
+           "  FROM resa2.discharge_stations "
+           "  WHERE dis_station_name LIKE 'NVE Modellert%%') "
+           "AND TO_CHAR(xdate, 'YYYY') = %s "
+           "GROUP BY dis_station_id "
+           "ORDER BY dis_station_id" % year)
+
+    an_avg_df = pd.read_sql_query(sql, engine)
+    an_avg_df.index = an_avg_df['dis_station_id']
+    del an_avg_df['dis_station_id']
+
+    ## Get long-term avg. values for NVE stns
+    sql = ("SELECT dis_station_id, ROUND(AVG(xvalue), 6) AS Qsnitt "
+           "FROM resa2.discharge_values "
+           "WHERE dis_station_id in ( "
+           "  SELECT dis_station_id "
+           "  FROM resa2.discharge_stations "
+           "  WHERE dis_station_name LIKE 'NVE Modellert%') "
+           "AND TO_CHAR(xdate, 'YYYY') BETWEEN 1990 AND 2008 "
+           "GROUP BY dis_station_id "
+           "ORDER BY dis_station_id")
+
+    lt_avg_df = pd.read_sql_query(sql, engine)
+    lt_avg_df.index = lt_avg_df['dis_station_id']
+    del lt_avg_df['dis_station_id']
+
+    # Get monthly avg. values for NVE stns
+    sql = ("SELECT dis_station_id, TO_CHAR(xdate,'MM') AS month, "
+           "  ROUND(AVG(xvalue), 6) as avg "
+           "FROM resa2.discharge_values "
+           "WHERE dis_station_id in ( "
+           "  SELECT dis_station_id "
+           "  FROM resa2.discharge_stations "
+           "  WHERE dis_station_name LIKE 'NVE Modellert%%') "
+           "AND TO_CHAR(xdate, 'YYYY') = %s "
+           "GROUP BY dis_station_id, TO_CHAR(xdate,'MM') "
+           "ORDER BY dis_station_id, TO_CHAR(xdate,'MM')" % year)
+
+    mon_avg_df = pd.read_sql_query(sql, engine)
+    mon_avg_df.set_index(['dis_station_id', 'month'], inplace=True)
+    mon_avg_df = mon_avg_df.unstack(level=-1)
+    mon_avg_df.columns = mon_avg_df.columns.droplevel(0)
+    mon_avg_df.columns = ['Q%s' % i for i in range(1, 13)]
+    mon_avg_df.columns.name = ''
+
+    # Combine
+    q_df = pd.concat([nve_stn_df, an_avg_df, 
+                      lt_avg_df, mon_avg_df], axis=1)
+
+    # Tidy
+    q_df.reset_index(inplace=True, drop=True)
+    q_df.sort_values(by='vassdrag', ascending=True, inplace=True)
+
+    # Build custom headers for TEOTIL
+    # 1st row
+    row1_txt = ('!Dette er en automatisk generert fil. '
+                'År:%sVannføring i m3/s. Dato:%s' % (year, pd.to_datetime('now')))
+    row1 = [row1_txt] + (len(q_df.columns) - 1)*['',]
+
+    # 2nd row
+    row2 = ['Vassdrag', 'QAr', 'Qsnitt', 'Q1', 'Q2', 'Q3', 'Q4', 
+            'Q5', 'Q6', 'Q7', 'Q8', 'Q9', 'Q10', 'Q11', 'Q12']
+
+    # Assign header as multi-index
+    q_df.columns = pd.MultiIndex.from_tuples(zip(row1, row2))
+
+    # Write output
+    out_path = os.path.join(out_fold, 'Q_Vassdrag.txt')
+    q_df.to_csv(out_path, sep=';', index=False, encoding='utf-8')
+    
+def write_teotil_observed_input_file(out_fold, loads_path, engine):
+    """ Writes a text file for input to TEOTIL based on observed loads.
+    
+    Args:
+        out_fold:   Str. Path to folder for output .txt file
+        loads_path: Str. CSV file of loads, as produced by
+                    rid.estimate_loads()
+        engine:     SQL-Alchemy 'engine' object already connected to 
+                    RESA2
+    
+    Returns:
+        None. Two (identical) text files are written to the specified 
+        folder.
+    """
+    import pandas as pd
+    import numpy as np
+    import os
+
+    # Read loads data
+    lds_df = pd.read_csv(loads_path)
+    lds_df.index = lds_df['station_id']
+
+    # Ignore '_Est' cols
+    val_cols = [i for i in lds_df.columns if i.split('_')[1]!='Est']    
+    lds_df = lds_df[val_cols]
+
+    # Get station data
+    sql = ("SELECT station_id, station_name, nve_vassdr_nr AS regine "
+           "FROM resa2.stations "
+           "WHERE station_id IN %s" % str(tuple(lds_df['station_id'].values)))
+
+    stn_df = pd.read_sql_query(sql, engine)
+    stn_df['station_name'] = stn_df['station_name'].str.decode('windows-1252')
+    stn_df.index = stn_df['station_id']
+
+    # Join
+    lds_df = pd.concat([stn_df, lds_df], axis=1)
+
+    # Tidy
+    del lds_df['station_id']
+    lds_df.reset_index(inplace=True)
+
+    # Add blank cols for HCHG and SUMPCB
+    lds_df['HCHG_tonnes'] = np.nan
+    lds_df['SUMPCB_tonnes'] = np.nan
+
+    # Convert Hg to tonnes
+    lds_df['Hg_tonnes'] = lds_df['Hg_kg'] / 1000.
+
+    # Reorder
+    cols = ['station_id', 'station_name', 'regine', 'SiO2_tonnes', 
+            'Cd_tonnes', 'Hg_tonnes', 'Cu_tonnes', 'Pb_tonnes', 'Zn_tonnes', 
+            'HCHG_tonnes', 'SUMPCB_tonnes', 'NH4-N_tonnes', 'NO3-N_tonnes', 
+            'PO4-P_tonnes', 'TOTN_tonnes', 'TOTP_tonnes', 'SPM_tonnes', 
+            'As_tonnes', 'Ni_tonnes', 'TOC_tonnes', 'Cr_tonnes']
+
+    lds_df = lds_df[cols]
+
+    # Build custom headers for TEOTIL
+    # 1st row
+    row1_txt = ('!Dette er en automatisk generert fil. '
+                'Målt vannkjemi. %s' % pd.to_datetime('now'))
+    row1 = [row1_txt] + (len(lds_df.columns) - 1)*['',]
+
+    # 2nd row
+    row2 = ['!STATION_ID', 'STATION_NAME', 'REGINE', 'SiO2(tonn)', 'Cd(tonn)', 
+            'Hg(tonn)', 'Cu(tonn)', 'Pb(tonn)', 'Zn(tonn)', 'HCHG(tonn)', 
+            'SUMPCB(tonn)', 'NH4-N(tonn)', 'NO3-N(tonn)', 'PO4-P(tonn)', 
+            'TOT-N(tonn)', 'TOT-P(tonn)', 'SPM(tonn)', 'As(tonn)', 'Ni(tonn)', 
+            'TOC(tonn)', 'Cr(tonn)']
+
+    # 3rd row
+    row3 = ['STATION_ID', 'STATION_NAME', 'REGINE', 'SiO2', 'Cd', 'Hg', 'Cu', 
+            'Pb', 'Zn', 'HCHG', 'SUMPCB', 'NH4-N', 'NO3-N', 'PO4-P', 'TOT-N', 
+            'TOT-P', 'SPM', 'As', 'Ni', 'TOC', 'Cr']
+
+    # Assign header as multi-index
+    lds_df.columns = pd.MultiIndex.from_tuples(zip(row1, row2, row3))
+
+    # Write output (2 identical files with different names)
+    # Lower
+    out_path = os.path.join(out_fold, 'RID_Observert_Lower.txt')
+    lds_df.to_csv(out_path, sep=';', index=False, encoding='utf-8')
+    
+    # Upper
+    out_path = os.path.join(out_fold, 'RID_Observert_Upper.txt')
+    lds_df.to_csv(out_path, sep=';', index=False, encoding='utf-8')
+    
+def get_prev_bio(row, df):
+    """ Used for calculating fish farm productivity.
+        Returns biomass for previous month. 
+        If month = 1, or if data for the previous month
+        are not available, returns 0.
+        
+        df is the same dataframe to which the function is 
+        being applied.
+    """
+    import pandas as pd
+    
+    # Get row props from multi-index
+    loc = row.name[0]
+    mon = row.name[1]
+    spec = row.name[2]
+    
+    # Get value for previous month
+    if mon == 1:
+        return 0
+    else:
+        try:
+            # Returns an IndexingError if data for (mon - 1)
+            # do not exist
+            return df.ix[(loc, mon - 1, spec)]['biomass']
+        
+        except pd.core.indexing.IndexingError:
+            return 0
+        
+def calc_productivity(row):
+    """ Used for calculating fish farm productivity.
+        Calculate productivity based on changes in biomass. 
+        Duplicated from formula in col H of N_P_ørret_2015.xlsx
+    """
+    if ((row['biomass'] == 0) or
+        (row['biomass_prev'] == 0) or 
+        (row['biomass'] < row['biomass_prev'])):
+        return row['FORFORBRUK_KILO'] / 1.15
+    
+    else:
+        return row['biomass'] - row['biomass_prev']
+    
+def calc_tap(row, par):
+    """ Used for calculating fish farm productivity.
+        Calculate N tap or P tap. I don't understand these calculations,
+        but the formulae are duplicated from cols I and J of 
+        N_P_ørret_2015.xlsx
+    
+    Args:
+        par: Str. Either 'N' or 'P'.
+    """  
+    # Define constants
+    if par == 'N':
+        k1 = 0.0584
+        k2 = 0.0296
+    elif par == 'P':
+        k1 = 0.0096
+        k2 = 0.0045
+    else:
+        raise ValueError('par must be "N" or "P".')
+    
+    if row['FORFORBRUK_KILO'] == 0:
+        return 0
+    
+    elif row['prod'] == 0:
+        return (k1*row['FORFORBRUK_KILO']) - (k2*row['FORFORBRUK_KILO']/1.15)
+    
+    elif ((k1*row['FORFORBRUK_KILO']) - (k2*row['prod'])) < 0:
+        return (k1*row['FORFORBRUK_KILO']) - (k2*row['FORFORBRUK_KILO']/1.15)
+    
+    else:
+        return (k1*row['FORFORBRUK_KILO']) - (k2*row['prod'])        
+    
+def estimate_fish_farm_nutrient_inputs(fish_df, year):
+    """ Main function for estimating fish farm nutrient inputs.
+        Recreates the Excel/Access workflow described in 
+        section 3.2 of prepare_teotil_inputs.ipynb.
+        
+        NOTE: Does not yet include calculations for Cu.
+        
+    Args:
+        fish_df: Dataframe. Tidied version of the raw fish farm 
+                 data. See fiske_oppdret_2015_raw.xlsx as an 
+                 example. Blank rows should be dropped in advance
+        year:    Int. Year of interest
+    
+    Retruns:
+        Dataframe in correct format for upload to 
+        RESA2.RID_KILDER_AQKULT_VALUES. 
+    """
+    import pandas as pd
+    import numpy as np
+
+    # Fill NaN with 0 where necessary
+    cols = ['FISKEBEHOLDNING_ANTALL', 'FISKEBEHOLDNING_SNITTVEKT',
+            'TAP_DOD', 'TAP_UTKAST', 'TAP_ROMT', 'TAP_ANNET', 
+            'TELLEFEIL', 'UTTAK_KILO']
+    for col in cols:
+        fish_df[col].fillna(value=0, inplace=True)
+
+    # Calculate biomass    
+    fish_df['biomass'] = ((((fish_df['FISKEBEHOLDNING_ANTALL'] * fish_df['FISKEBEHOLDNING_SNITTVEKT']) +
+                            (fish_df['TAP_DOD'] * fish_df['FISKEBEHOLDNING_SNITTVEKT']) +
+                            (fish_df['TAP_UTKAST'] * fish_df['FISKEBEHOLDNING_SNITTVEKT']) +
+                            (fish_df['TAP_ROMT'] * fish_df['FISKEBEHOLDNING_SNITTVEKT']) +
+                            (fish_df['TAP_ANNET'] * fish_df['FISKEBEHOLDNING_SNITTVEKT']) +
+                            (fish_df['TELLEFEIL'] * fish_df['FISKEBEHOLDNING_SNITTVEKT'])) / 1000.) +
+                           fish_df['UTTAK_KILO'])
+
+    # Aggregate by month, location and species
+    fish_grp = fish_df.groupby(by=['LOKNR', 'MAANED', 'FISKEARTID'])
+    fish_sum = fish_grp.sum()[['FORFORBRUK_KILO', 'biomass']]
+
+    # Get biomass for previous month
+    fish_sum['biomass_prev'] = fish_sum.apply(get_prev_bio, args=(fish_sum,), axis=1)
+
+    # Get productivity for each month
+    fish_sum['prod'] = fish_sum.apply(calc_productivity, axis=1)
+
+    # Calculate NTAP and PTAP
+    fish_sum['ntap'] = fish_sum.apply(calc_tap, args=('N',), axis=1)
+    fish_sum['ptap'] = fish_sum.apply(calc_tap, args=('P',), axis=1)
+
+    # Get just the data for trout and salmon
+    fish_sum = fish_sum.iloc[(fish_sum.index.get_level_values('FISKEARTID') == 71101) |
+                             (fish_sum.index.get_level_values('FISKEARTID') == 71401)]
+
+    # Aggregate by location
+    fish_sum.reset_index(inplace=True)
+    fish_grp = fish_sum.groupby(by=['LOKNR'])
+    fish_sum = fish_grp.sum()[['ntap', 'ptap']]
+
+    # Convert to par_ids and melt to format required by RESA2
+    fish_sum.columns = [39, 40]
+    fish_sum.reset_index(inplace=True)
+    fish_sum = pd.melt(fish_sum, id_vars='LOKNR', 
+                       var_name='IN_PAR_ID', value_name='VALUE')
+
+    # Add cols to match RESA2 schema
+    fish_sum['AR'] = year
+    fish_sum['MANED'] = 6
+    fish_sum['ART'] = np.nan
+
+    # Reorder cols
+    fish_sum = fish_sum[['LOKNR', 'IN_PAR_ID', 'AR', 'MANED', 'ART', 'VALUE']]
+
+    # Rename cols
+    fish_sum.columns = ['ANLEGG_NR', 'IN_PAR_ID', 'AR', 'MANED', 'ART', 'VALUE']
+
+    return fish_sum
+
+def estimate_teotil_land_use_coefficients(lu_path, sheetname, 
+                                          year, out_fold):
+    """ Caclulates land use coefficients for TEOTIL based on data
+        supplied by Bioforsk.
+        
+    Args:
+        lu_path:   Str. Path to tidied Excel file from Bioforsk. See
+                   jordbruk_2015.xlsx as an example
+        sheetname: Str. Name of sheet with data in Bioforsk Excel file
+        year:      Int. Year of interest
+        out_fold:  Str. Folder in which to save 
+                   Koeffisienter_jordbruk.txt
+    
+    Returns:
+        None. The file is written to the specified folder.
+    """
+    import pandas as pd
+    import os
+    
+    # Read LU areas (same values used every year)
+    in_xlsx = (r'C:\Data\James_Work\Staff\Oeyvind_K\Elveovervakingsprogrammet'
+               r'\Data\RID_Fylke-Sone_LU_Areas.xlsx')
+    lu_areas = pd.read_excel(in_xlsx, sheetname='Sheet1')
+
+    # Read Bioforsk data
+    lu_lds = pd.read_excel(lu_path, sheetname=sheetname)
+
+    # Join
+    lu_df = pd.merge(lu_lds, lu_areas, how='outer',
+                     on='Omrade')
+
+    # Calculate required columns
+    # N
+    lu_df['Naker'] = (lu_df['N_diff']/lu_df['Adyrket_km2'] +
+                      lu_df['N_back']/lu_df['Adyrket_km2'])
+
+    lu_df['Npunkt'] = lu_df['N_point']/lu_df['Aeng_km2']
+
+    lu_df['Ndyrket_nat'] = lu_df['N_back']/lu_df['Adyrket_km2']
+
+    # P
+    lu_df['Paker'] = (lu_df['P_diff']/lu_df['Adyrket_km2'] +
+                      lu_df['P_back']/lu_df['Adyrket_km2'])
+
+    lu_df['Ppunkt'] = lu_df['P_point']/lu_df['Aeng_km2']
+
+    lu_df['Pdyrket_nat'] = lu_df['P_back']/lu_df['Adyrket_km2']
+
+    # Convert areas to da
+    lu_df['Adyrket'] = 1000.*lu_df['Adyrket_km2']
+    lu_df['Aeng'] = 1000.*lu_df['Aeng_km2']
+
+    # Get cols of interest
+    cols = ['Fylke_sone', 'Fysone_navn', 'Naker', 'Npunkt', 'Ndyrket_nat', 
+            'Paker', 'Ppunkt', 'Pdyrket_nat', 'Adyrket', 'Aeng']
+    lu_df = lu_df[cols]
+
+    # Create multi-index with correct headings for TEOTIL
+    first = ['!%s' % year, 'Fysone_navn', 'kg/km2', 'kg/km2', 
+             'kg/km2', 'kg/km2', 'kg/km2', 'kg/km2', 'da', 'da']
+
+    secnd = ['Fylke_sone', '', 'Naker', 'Npunkt', 'Ndyrket_nat', 
+             'Paker', 'Ppunkt', 'Pdyrket_nat', 'Adyrket', 'Aeng']
+
+    lu_df.columns = pd.MultiIndex.from_tuples(zip(first, secnd))
+
+    # Write output
+    out_path = os.path.join(out_fold, 'Koeffisienter_jordbruk.txt')
+    lu_df.to_csv(out_path, sep=';', index=False, encoding='utf-8')
