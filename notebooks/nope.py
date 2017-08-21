@@ -57,8 +57,8 @@ def accumulate_loads(g):
     
     Args
         g Pre-built NetworkX graph. Must be a directed tree/forest
-          and each nodes must have properties 'li' (internal load)
-          and 'wt' (transmission factor)
+          and each nodes must have properties 'local' (internal load)
+          and 'output' (empty dict).
           
     Returns
         Graph. g is modifed by adding the property 'Oi' to each node.
@@ -277,3 +277,46 @@ def make_map(g, stat='accum', quant='q_m3/s', sqrt=False,
         plt.savefig(plot_path, dpi=300)
 
     return fig
+
+def model_to_dataframe(g, out_path=None):
+    """ Convert a NOPE graph to a Pandas dataframe. If a path
+        is supplied, the DF will be written to CSV format.
+    
+    Args:
+        g          NetworkX graph object returned by nope.run_nope()
+        plot_path: Raw Str. Optional. CSV path to which df will 
+                   be saved
+        
+    Returns:
+        Dataframe 
+    """
+    import networkx as nx
+    import pandas as pd
+    from collections import defaultdict
+
+    # Container for data
+    out_dict = defaultdict(list)
+    
+    # Loop over data
+    for nd in nx.topological_sort(g)[:-1]:
+        for stat in ['local', 'accum']:
+            for key in g.node[nd][stat]:
+                out_dict['%s_%s' % (stat, key)].append(g.node[nd][stat][key])
+                
+    # Convert to df
+    df = pd.DataFrame(out_dict)
+    
+    # Reorder cols
+    key_cols = ['local_regine', 'local_regine_ned']
+    cols = [i for i in df.columns if not i in key_cols]
+    cols.sort()
+    df = df[key_cols+cols]   
+    cols = list(df.columns)
+    cols[:2] = ['regine', 'regine_ned']
+    df.columns = cols
+    
+    # Write output
+    if out_path:
+        df.to_csv(out_path, index=False, encoding='utf-8')
+    
+    return df
