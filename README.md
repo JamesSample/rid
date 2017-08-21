@@ -15,3 +15,7 @@ The analysis for 2016/17 is documented in the following notebooks:
  4. **[Preparing input files for TEOTIL and running the model](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prepare_teotil_inputs.ipynb)**. For parts of Norway where monitoring data are unavailable, the model [TEOTIL](https://brage.bibsys.no/xmlui/handle/11250/214825) is used to estimate nutrient loads (nitrogen and phosphorus). This notebook describes the data processing required to generate input files for the model and compares the output from the new workflow with previous results.
  
  5. **[Summary tables in Microsoft Word](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/word_data_tables.ipynb)**. Preparing key data tables for the report
+
+ 6. **[Updating OSPAR discharge summaries](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/recalculate_ospar_flows.ipynb)**. Some revisions are required to discharge data previously submitted to OSPAR. This notebook applies the corrections and fills-in the templates.
+ 
+ 7. **[A new export-coefficient-based pollutant model for Norway](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/nope_model.ipynb)**. Some changes are required to the way loads are modelled in the RID project. One option is to modify TEOTIL, another is to develop a new model entirely. This notebook develops and tests a simple export-coefficient-based pollutant model for simulating Norwegian river loads. 
