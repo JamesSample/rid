@@ -630,7 +630,104 @@ def estimate_missing_data(wc_df, stn_id, par_list, year, engine):
         wc_df = pd.concat([wc_df, est_df], axis=1)
 
     return wc_df
+
+def write_csv_water_chem(stn_df, year, csv_path, engine):
+    """ Creates  CSV summarising flow and water chemistry data
+        for the RID_11 and RID_36 stations. Replaces Tore's 
+        NIVA.RESAEXTENSIONS Visual Studio project.
     
+    Args:
+        stn_df:   Dataframe listing the 47 sites of interest. Must
+                  include [station_id, station_code, station_name]
+        year:     Int. Year of interest
+        csv_path: Filename for CSV
+        engine:   SQL-Alchemy 'engine' object already connected to RESA2
+        
+    Returns:
+        Dataframe. The CSV is saved.
+    """
+    import pandas as pd
+    import numpy as np
+
+    # Chem pars of interest
+    par_list = ['pH', 'KOND', 'TURB860', 'SPM', 'TOC', 'PO4-P', 
+                'TOTP', 'NO3-N', 'NH4-N', 'TOTN', 'SiO2', 'Ag', 
+                'As', 'Pb', 'Cd', 'Cu', 'Zn', 'Ni', 'Cr', 'Hg']
+
+    # Container for output
+    df_list = []
+
+    # Loop over stations
+    for stn_id in stn_df['station_id'].values:
+        # Get WC data
+        wc_df, dup_df  = extract_water_chem(stn_id, par_list, 
+                                            '%s-01-01' % year,
+                                            '%s-12-31' % year,
+                                            engine, plot=False)
+
+        # Get list of cols of interest for later
+        cols = wc_df.columns
+        par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
+        par_unit_list.append('Qs_m3/s')
+
+        # Add date col (ignoring time)
+        wc_df['date'] = wc_df.index.date
+
+        # Reset index
+        wc_df.reset_index(inplace=True)
+
+        print '    Extracting flow data...'
+
+        # Get flow data
+        q_df = extract_discharge(stn_id, 
+                                 '%s-01-01' % year,
+                                 '%s-12-31' % year,
+                                 engine, plot=False)
+
+        # Add date col (ignoring time)
+        q_df['date'] = q_df.index.date
+
+        # Join flows to chem
+        df = pd.merge(wc_df, q_df, how='left', on='date')
+
+        # Set index
+        df.index = df['sample_date']
+        
+        # Add station id
+        df['station_id'] = stn_id
+
+        # Tidy
+        df['Qs_m3/s'] = df['flow_m3/s']
+        del df['date'], df['flow_m3/s'], df['sample_date']
+        df.sort_index(inplace=True)   
+        df.reset_index(inplace=True)
+
+        df_list.append(df)
+
+    # Build df
+    df = pd.concat(df_list, axis=0)
+    
+    # Join stn details
+    df = pd.merge(stn_df, df, how='left', on='station_id')
+    
+    # Reorder cols and tidy
+    st_cols = ['station_id', 'station_code', 'station_name', 'rid_group', 
+               'ospar_region', 'sample_date', 'Qs_m3/s']
+    unwant_cols = ['nve_vassdrag_nr', 'lat', 'lon', 'utm_north', 'utm_east', 
+                   'utm_zone', 'station_type'] 
+    par_cols = [i for i in df.columns if i not in (st_cols+unwant_cols)]
+    par_cols.sort()
+
+    for col in unwant_cols:
+        del df[col]
+
+    df = df[st_cols + par_cols]
+    
+    # Write output
+    df.to_csv(csv_path, index=False, encoding='utf-8')
+
+    return df
+
 def remove_row(table, row):
     """ Function to remove a row from a Word table. See:
         https://groups.google.com/forum/#!topic/python-docx/aDumlNvK6GM
@@ -1629,3 +1726,87 @@ def estimate_teotil_land_use_coefficients(lu_path, sheetname,
     # Write output
     out_path = os.path.join(out_fold, 'Koeffisienter_jordbruk.txt')
     lu_df.to_csv(out_path, sep=';', index=False, encoding='utf-8')
+    
+def get_flow_volumes(stn_df, st_yr, end_yr, engine):
+    """ Gets flow summaries for the specified sites. Returns dataframe
+        of average annual daily flow volume in 1000m3/day for each
+        year between st_yr and end_yr.
+    
+    Args:
+        stn_df: Dataframe sites of interest. Must include 
+                [station_id, station_code, station_name]
+        st_yr:  Int. Start year of interest
+        end_yr: Int. End year of interest
+        engine: SQL-Alchemy 'engine' object already connected to RESA2
+        
+    Returns:
+        Dataframe.
+    """
+    import pandas as pd
+    
+    # Container for results
+    df_list = []
+
+    # Loop over sites
+    for stn_id in stn_df['station_id']:
+        # Get catch area for chem station
+        sql = ("SELECT catchment_area FROM resa2.stations "
+               "WHERE station_id = %s" % stn_id)
+        area_df = pd.read_sql_query(sql, engine)    
+        wc_area = area_df['catchment_area'].iloc[0]
+
+        # Get linked discharge station
+        sql = ("SELECT * FROM resa2.default_dis_stations "
+               "WHERE station_id = %s" % stn_id)
+        dis_df = pd.read_sql_query(sql, engine)
+        dis_stn_id = dis_df['dis_station_id'].iloc[0]
+
+        # Get catchment area for discharge station
+        sql = ("SELECT area FROM resa2.discharge_stations "
+               "WHERE dis_station_id = %s" % dis_stn_id)
+        area_df = pd.read_sql_query(sql, engine)    
+        dis_area = area_df['area'].iloc[0]
+
+        # Get annual summary flow stats for this station
+        sql = ("SELECT TO_CHAR(xdate, 'YYYY') as year, "
+               "       AVG(xvalue) as mean, "
+               "       MIN(xvalue) as min, " 
+               "       MAX(xvalue) as max " 
+               "FROM resa2.discharge_values "
+               "WHERE dis_station_id = %s "
+               "AND xdate >= date '%s-01-01' "
+               "AND xdate <= date '%s-12-31' "
+               "GROUP BY TO_CHAR(xdate, 'YYYY') "
+               "ORDER BY year" % (dis_stn_id, st_yr, end_yr))
+        q_df = pd.read_sql_query(sql, engine) 
+
+        # Set index
+        q_df.index = q_df['year']
+        del q_df['year']
+
+        # Scale flows by area ratio
+        q_df = q_df*wc_area/dis_area
+
+        # Convert m3/s to 1000 m3/d
+        q_df = q_df*60*60*24/1000
+
+        # Reset index
+        q_df.reset_index(inplace=True)
+
+        # Add stn id
+        q_df['station_id'] = stn_id
+
+        # Re-order cols to match template
+        q_df = q_df[['station_id', 'year', 'mean']]
+        q_df.columns = ['station_id', 'year', 'mean_q_1000m3/day']
+
+        # Add to results
+        df_list.append(q_df)
+
+    # Combine to single df
+    q_df = pd.concat(df_list, axis=0) 
+
+    # Convert year to int
+    q_df['year'] = q_df['year'].astype(int)
+
+    return q_df
