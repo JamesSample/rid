@@ -20,6 +20,8 @@ The links below provide background to the project and develop code for the new p
 
  6. **[A new export-coefficient-based pollutant model for Norway](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/nope_model.ipynb)**. Some changes are required to the way loads are modelled in the RID project. One option is to modify TEOTIL, another is to develop a new model entirely. This notebook develops and tests a simple export-coefficient-based pollutant model (provisionally called NOPE) for simulating Norwegian river loads. 
 
+ 7. **[Estimating loads in unmonitored areas](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions.ipynb)**. Using the new NOPE model to estimate loads in unmonitored regions, and comparing the results to values previously reported.
+ 
 ## Annual data processing
 
 Links to the annual data processing are provided below.
