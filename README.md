@@ -1,10 +1,12 @@
 # Riverine Inputs and Direct Discharges (RID) Programme (Elveovervåkingsprogrammet)
 
-This repository includes code for **estimating pollutant loads to Norwegian coastal waters**. The work is part of a joint  monitoring programme under the [OSPAR Commission](https://www.ospar.org/) for the *Protection of the Marine Environment of the Northeast Atlantic*. The main purpose is to estimate total loads of selected pollutants draining annually to Convention waters from inland water bodies.
+This repository includes code for **estimating pollutant loads to Norwegian coastal waters**. The work is part of a joint  monitoring programme under the [OSPAR Commission](https://www.ospar.org/) for the **Protection of the Marine Environment of the Northeast Atlantic**. The main purpose is to estimate total loads of selected pollutants draining annually to Convention waters from inland water bodies.
 
 The Norwegian component of the programme involves collaboration between [NIVA](http://www.niva.no/), [NIBIO](http://www.nibio.no/) and [NVE](https://www.nve.no/), and is supported by the [Norwegain Environment Agency](http://www.miljodirektoratet.no/en/). The code available in this repository was produced by NIVA.
 
-The analysis for 2016/17 is documented in the following notebooks:
+## Background and code development
+
+The links below provide background to the project and develop code for the new project workflow.
 
  1. **[Initial data exploration](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_data_exploration.ipynb)**. Getting to know the project and exploring the results from previous years
  
@@ -16,6 +18,14 @@ The analysis for 2016/17 is documented in the following notebooks:
  
  5. **[Summary tables in Microsoft Word](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/word_data_tables.ipynb)**. Preparing key data tables for the report
 
- 6. **[Updating OSPAR discharge summaries](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/recalculate_ospar_flows.ipynb)**. Some revisions are required to discharge data previously submitted to OSPAR. This notebook applies the corrections and fills-in the templates.
+ 6. **[A new export-coefficient-based pollutant model for Norway](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/nope_model.ipynb)**. Some changes are required to the way loads are modelled in the RID project. One option is to modify TEOTIL, another is to develop a new model entirely. This notebook develops and tests a simple export-coefficient-based pollutant model (provisionally called NOPE) for simulating Norwegian river loads. 
+
+## Annual data processing
+
+Links to the annual data processing are provided below.
+
+## 2016/17
+
+ 1. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_working_2016-17.ipynb)**. The code developed above is applied using data for 2016 for the 155 sites where water chemistry is measured.
  
- 7. **[A new export-coefficient-based pollutant model for Norway](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/nope_model.ipynb)**. Some changes are required to the way loads are modelled in the RID project. One option is to modify TEOTIL, another is to develop a new model entirely. This notebook develops and tests a simple export-coefficient-based pollutant model (provisionally called NOPE) for simulating Norwegian river loads. 
+ 2. **[Updating OSPAR discharge summaries](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/recalculate_ospar_flows.ipynb)**. Some revisions are required to discharge data previously submitted to OSPAR. This notebook applies the corrections and fills-in new OSPAR templates for the period from 1990 to 2016.
