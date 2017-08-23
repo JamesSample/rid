@@ -236,7 +236,7 @@ def make_map(g, stat='accum', quant='q_m3/s', sqrt=False,
                 ellps='WGS84')     # http://matplotlib.org/basemap/api/basemap_api.html
 
     # Add map components
-    m.fillcontinents (color='darkkhaki', lake_color='darkkhaki', zorder=0)
+    m.fillcontinents (color='darkkhaki', lake_color='paleturquoise', zorder=0)
     m.drawcountries(linewidth=1)
     m.drawcoastlines(linewidth=1)
     m.drawmapboundary(fill_color='paleturquoise')
