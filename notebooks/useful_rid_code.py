@@ -1579,7 +1579,7 @@ def calc_tap(row, par):
     else:
         return (k1*row['FORFORBRUK_KILO']) - (k2*row['prod'])        
     
-def estimate_fish_farm_nutrient_inputs(fish_df, year):
+def estimate_fish_farm_nutrient_inputs(fish_df, year, cu):
     """ Main function for estimating fish farm nutrient inputs.
         Recreates the Excel/Access workflow described in 
         section 3.2 of prepare_teotil_inputs.ipynb.
@@ -1591,6 +1591,8 @@ def estimate_fish_farm_nutrient_inputs(fish_df, year):
                  data. See fiske_oppdret_2015_raw.xlsx as an 
                  example. Blank rows should be dropped in advance
         year:    Int. Year of interest
+        cu:      Int. Annual tonnes of Cu. Distributed in proportion
+                 to P loads
     
     Retruns:
         Dataframe in correct format for upload to 
@@ -1637,12 +1639,15 @@ def estimate_fish_farm_nutrient_inputs(fish_df, year):
     fish_sum.reset_index(inplace=True)
     fish_grp = fish_sum.groupby(by=['LOKNR'])
     fish_sum = fish_grp.sum()[['ntap', 'ptap']]
+    
+    # Distribute Cu according to P production
+    fish_sum['cutap'] = cu*fish_sum['ptap'] / fish_sum['ptap'].sum()
 
     # Convert to par_ids and melt to format required by RESA2
-    fish_sum.columns = [39, 40]
+    fish_sum.columns = [39, 40, 41]
     fish_sum.reset_index(inplace=True)
     fish_sum = pd.melt(fish_sum, id_vars='LOKNR', 
-                       var_name='IN_PAR_ID', value_name='VALUE')
+                       var_name='INP_PAR_ID', value_name='VALUE')
 
     # Add cols to match RESA2 schema
     fish_sum['AR'] = year
@@ -1650,10 +1655,10 @@ def estimate_fish_farm_nutrient_inputs(fish_df, year):
     fish_sum['ART'] = np.nan
 
     # Reorder cols
-    fish_sum = fish_sum[['LOKNR', 'IN_PAR_ID', 'AR', 'MANED', 'ART', 'VALUE']]
+    fish_sum = fish_sum[['LOKNR', 'INP_PAR_ID', 'AR', 'MANED', 'ART', 'VALUE']]
 
     # Rename cols
-    fish_sum.columns = ['ANLEGG_NR', 'IN_PAR_ID', 'AR', 'MANED', 'ART', 'VALUE']
+    fish_sum.columns = ['ANLEGG_NR', 'INP_PAR_ID', 'AR', 'MANED', 'ART', 'VALUE']
 
     return fish_sum
 
@@ -1686,7 +1691,7 @@ def estimate_teotil_land_use_coefficients(lu_path, sheetname,
 
     # Join
     lu_df = pd.merge(lu_lds, lu_areas, how='outer',
-                     on='Omrade')
+                     on='omrade')
 
     # Calculate required columns
     # N
