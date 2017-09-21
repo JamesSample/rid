@@ -38,4 +38,4 @@ Links to the annual data processing are provided below.
  
  3. **[Updating OSPAR discharge summaries](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/recalculate_ospar_flows.ipynb)**. Some revisions are required to discharge data previously submitted to OSPAR. This notebook applies the corrections and fills-in new OSPAR templates for the period from 1990 to 2016.
  
- 4. **[Processing annual inputs for 2016](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions.ipynb_2016)**. Restructuring the land use, sewage, industry and fish farm datasets for 2016 and adding them to the database.
+ 4. **[Processing annual inputs for 2016](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2016.ipynb)**. Restructuring the land use, sewage, industry and fish farm datasets for 2016 and adding them to the database.
