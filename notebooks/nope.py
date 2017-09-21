@@ -59,6 +59,67 @@ def run_nope(data, par_list):
     
     return g
 
+def build_calib_network(data, calib_node_set):
+    """ Build an unattributed network for the calibration catchments.
+    
+    Args:
+        data:           Dataframe or raw str to model input file. Must include
+                        'regine' and 'regine_ned' columns describing network 
+                        links.
+        calib_node_set: Set of catchment IDs for which calibration data are 
+                        available.
+        
+    Returns:
+        (g, nd_list). Tuple. g is a NetworkX graph object for the sub-network
+        upstream of catchments in calib_node_set. nd_list is a topologically
+        sorted list of nodes.
+    """
+    import pandas as pd
+    import numpy as np
+    import networkx as nx
+
+    # Parse input
+    if isinstance(data, pd.DataFrame):
+        df = data
+       
+    elif isinstance(data, str):
+        df = pd.read_csv(data)
+        
+    else:
+        raise ValueError('"data" must be either a "raw" string or a Pandas dataframe.')
+
+    # Build graph
+    g = nx.DiGraph()
+
+    # Add nodes
+    for idx, row in df.iterrows():
+        nd = row['regine']
+        g.add_node(nd, local={}, accum={})
+
+    # Add edges
+    for idx, row in df.iterrows():
+        fr_nd = row['regine']
+        to_nd = row['regine_ned']
+        g.add_edge(fr_nd, to_nd)
+
+    # Check directed tree
+    assert nx.is_tree(g), 'g is not a valid tree.'
+    assert nx.is_directed_acyclic_graph(g), 'g is not a valid DAG.' 
+    
+    # Get nodes upstream of each site with data
+    nd_set = set()
+    for nd in calib_node_set:
+        nds = nx.dfs_tree(g.reverse(), nd).nodes()
+        nd_set.update(nds)
+        
+    # Get subgraph
+    g = g.subgraph(nd_set).copy()
+    
+    # Get topo node list
+    nd_list = nx.topological_sort(g)
+    
+    return (g, nd_list)
+
 def accumulate_loads(g, par_list):
     """ Core function for TEOTIL-like network accumulation over a
         hydrological network.
@@ -135,6 +196,150 @@ def accumulate_loads(g, par_list):
     
     return g
 
+def update_and_accumulate(g, nd_list, year, data_dict, cal_pars, par_list, reg_set):
+    """ Update network with properties for 'year' and accumulate 
+        downstream.
+    
+    Args
+        g:         Pre-built NetworkX graph. Must be a directed tree/forest
+                   and each nodes must have properties 'local' (internal load)
+                   and 'output' (empty dict).
+        nd_list:   List. Topologically sorted list of nodes of g
+        year:      Int. Year of interest
+        data_dict: Dict. data_dict['node', year]['quantity]
+        cal_pars:  Dict. Calibration parameters
+        par_list:  List of parameters in the input file
+        reg_set:  List of regine ID of interest
+          
+    Returns
+        Dict containing accumulated loads for IDs in reg_set.
+    """
+    import networkx as nx
+    import pandas as pd
+    from collections import defaultdict 
+    
+    # Container for results
+    out_dict = {'regine':[],
+                'q_m3/s':[]}
+    for par in par_list:
+        out_dict['%s_tonnes' % par] = []
+    
+    # Process nodes in topo order from headwaters down
+    for nd in nd_list:
+        # Update local properties
+        # 1. Flow
+        g.node[nd]['local']['q_reg_m3/s'] = data_dict[(nd, year)]['q_reg_m3/s']
+        
+        # 2. Water chem and transmission
+        for par in par_list:            
+            g.node[nd]['local']['trans_%s' % par] = (data_dict[(nd, year)]['trans_%s' % par] *
+                                                     cal_pars['b_r_%s' % par])
+
+            g.node[nd]['local']['%s_tonnes' % par] = ((data_dict[(nd, year)]['all_point_%s_tonnes' % par] *
+                                                       cal_pars['b_p_%s' % par]) +
+                                                      (data_dict[(nd, year)]['all_diff_%s_tonnes' % par] *
+                                                       cal_pars['b_d_%s' % par]))          
+        
+        # Accumulate
+        # Get catchments directly upstream
+        preds = g.predecessors(nd)
+        
+        if len(preds) > 0:
+            # Accumulate total input from upstream
+            # Counters default to 0
+            q_up = 0
+            tot_dict = defaultdict(int)
+            
+            # Loop over upstream catchments            
+            for pred in preds:
+                q_up += g.node[pred]['accum']['q_m3/s']
+                
+                # Loop over quantities of interest
+                for par in par_list:
+                    tot_dict['%s_tonnes' % par] += g.node[pred]['accum']['%s_tonnes' % par]              
+            
+            # Assign outputs
+            # Flow
+            g.node[nd]['accum']['q_m3/s'] = q_up + g.node[nd]['local']['q_reg_m3/s']
+            
+            # Calculate output. Oi = ti(Li + Ii)
+            for par in par_list:            
+                g.node[nd]['accum']['%s_tonnes' % par] = ((g.node[nd]['local']['%s_tonnes' % par] +
+                                                           tot_dict['%s_tonnes' % par]) *
+                                                          g.node[nd]['local']['trans_%s' % par])
+                    
+        else:
+            # Flow
+            g.node[nd]['accum']['q_m3/s'] = g.node[nd]['local']['q_reg_m3/s']        
+            
+            # No upstream inputs. Oi = ti * Li
+            for par in par_list:
+                g.node[nd]['accum']['%s_tonnes' % par] = (g.node[nd]['local']['%s_tonnes' % par] *
+                                                          g.node[nd]['local']['trans_%s' % par])
+    
+    # Add results to dict
+    for nd in reg_set:
+        out_dict['regine'].append(nd)
+        out_dict['q_m3/s'].append(g.node[nd]['accum']['q_m3/s'])
+        for par in par_list:
+            out_dict['%s_tonnes' % par].append(g.node[nd]['accum']['%s_tonnes' % par])
+    
+    # Build df
+    df = pd.DataFrame(out_dict)
+    
+    # Add year
+    df['year'] = year
+                
+    return df
+
+def run_model_multi_year(g, nd_list, st_yr, end_yr, in_data, 
+                         par_list, reg_set, cal_pars=None):
+    """ Run model for specified years.
+    
+    Args
+        g:         Pre-built NetworkX graph. Must be a directed tree/forest
+                   and each nodes must have properties 'local' (internal load)
+                   and 'output' (empty dict).
+        nd_list:   List. Topologically sorted list of nodes of g
+        st_yr:     Int. Start year of interest
+        end_yr:    Int. End year of interest
+        in_data    Dict. All data required to run model
+        cal_pars:  Dict. Calibration parameters
+        par_list:  List of parameters in the input file
+        reg_set:   List of regine IDs of interest
+          
+    Returns
+        Dataframe of annual accumulated loads for IDs in reg_set.
+    """
+    import pandas as pd
+
+    # Build cal_par dict if necessary
+    if cal_pars is None:
+        cal_pars = {}
+        for par in par_list:
+            for coef in ['b_r', 'b_p', 'b_d']:
+                # Set defaults to 1
+                cal_pars['%s_%s' % (coef, par)] = 1
+    
+    # Container for output
+    df_list = []
+    
+    # Loop over years
+    for year in range(st_yr, end_yr+1):
+        df = update_and_accumulate(g, nd_list, year, in_data, cal_pars, 
+                                   par_list, reg_set)    
+
+        df_list.append(df)
+    
+    # Combine
+    df = pd.concat(df_list, axis=0)
+    
+    # Reorder
+    cols = ['regine', 'year', 'q_m3/s'] + ['%s_tonnes' % i for i in par_list]
+    df = df[cols]
+
+    return df    
+
 def plot_network(g, catch_id, direct='down', stat='accum', 
                  quant='upstr_area_km2'):
     """ Create schematic diagram upstream or downstream of specified node.
@@ -162,7 +367,7 @@ def plot_network(g, catch_id, direct='down', stat='accum',
             
     elif direct == 'up':
         # Get sub-tree
-        g2 = nx.dfs_tree(g.reverse(), catch_id)
+        g2 = nx.dfs_tree(g.reverse(), catch_id).reverse()
 
         # Update labels with 'quant'
         for nd in nx.topological_sort(g2):
@@ -361,21 +566,28 @@ def get_annual_spredt_data(year, engine,
            "AND ar = %s" % year)
 
     spr_df = pd.read_sql(sql, engine)
+    
+    # Only continue if data
+    if len(spr_df) == 0:
+        print 'No spredt data for %s.' % year
+        
+        return None
+        
+    else:
+        # Pivot
+        spr_df = spr_df.pivot(index='komnr', columns='name', values='value')
 
-    # Pivot
-    spr_df = spr_df.pivot(index='komnr', columns='name', values='value')
+        # Tidy
+        spr_df = spr_df[par_list]
+        cols = ['spr_%s_tonnes' % i.lower() for i in spr_df.columns]
+        spr_df.columns = cols
+        spr_df.columns.name = ''
+        spr_df.reset_index(inplace=True)
+        spr_df.dropna(subset=['komnr',], inplace=True)
+        spr_df.dropna(subset=cols, how='all', inplace=True)
+        spr_df['komnr'] = spr_df['komnr'].astype(int)
 
-    # Tidy
-    spr_df = spr_df[par_list]
-    cols = ['spr_%s_tonnes' % i.lower() for i in spr_df.columns]
-    spr_df.columns = cols
-    spr_df.columns.name = ''
-    spr_df.reset_index(inplace=True)
-    spr_df.dropna(subset=['komnr',], inplace=True)
-    spr_df.dropna(subset=cols, how='all', inplace=True)
-    spr_df['komnr'] = spr_df['komnr'].astype(int)
-
-    return spr_df
+        return spr_df
 
 def get_annual_aquaculture_data(year, engine,
                                 par_list=['Tot-N', 'Tot-P']):
@@ -410,19 +622,26 @@ def get_annual_aquaculture_data(year, engine,
 
     aqu_df = pd.read_sql(sql, engine)
 
-    # Pivot
-    aqu_df = aqu_df.pivot(index='regine', columns='name', values='value')
+    # Only continue if data
+    if len(aqu_df) == 0:
+        print 'No aquaculture data for %s.' % year
+        
+        return None
+    
+    else:
+        # Pivot
+        aqu_df = aqu_df.pivot(index='regine', columns='name', values='value')
 
-    # Tidy
-    aqu_df = aqu_df[par_list]
-    cols = ['aqu_%s_tonnes' % i.lower() for i in aqu_df.columns]
-    aqu_df.columns = cols
-    aqu_df.columns.name = ''
-    aqu_df.reset_index(inplace=True)
-    aqu_df.dropna(subset=['regine',], inplace=True)
-    aqu_df.dropna(subset=cols, how='all', inplace=True)
+        # Tidy
+        aqu_df = aqu_df[par_list]
+        cols = ['aqu_%s_tonnes' % i.lower() for i in aqu_df.columns]
+        aqu_df.columns = cols
+        aqu_df.columns.name = ''
+        aqu_df.reset_index(inplace=True)
+        aqu_df.dropna(subset=['regine',], inplace=True)
+        aqu_df.dropna(subset=cols, how='all', inplace=True)
 
-    return aqu_df
+        return aqu_df
 
 def get_annual_renseanlegg_data(year, engine,
                                 par_list=['Tot-N', 'Tot-P']):
@@ -458,19 +677,26 @@ def get_annual_renseanlegg_data(year, engine,
 
     ren_df = pd.read_sql(sql, engine)
 
-    # Pivot
-    ren_df = ren_df.pivot(index='regine', columns='name', values='value')
+    # Only continue if data
+    if len(ren_df) == 0:
+        print 'No renseanlegg data for %s.' % year
+        
+        return None
+    
+    else:    
+        # Pivot
+        ren_df = ren_df.pivot(index='regine', columns='name', values='value')
 
-    # Tidy
-    ren_df = ren_df[par_list]
-    cols = ['ren_%s_tonnes' % i.lower() for i in ren_df.columns]
-    ren_df.columns = cols
-    ren_df.columns.name = ''
-    ren_df.reset_index(inplace=True)
-    ren_df.dropna(subset=['regine',], inplace=True)
-    ren_df.dropna(subset=cols, how='all', inplace=True)
+        # Tidy
+        ren_df = ren_df[par_list]
+        cols = ['ren_%s_tonnes' % i.lower() for i in ren_df.columns]
+        ren_df.columns = cols
+        ren_df.columns.name = ''
+        ren_df.reset_index(inplace=True)
+        ren_df.dropna(subset=['regine',], inplace=True)
+        ren_df.dropna(subset=cols, how='all', inplace=True)
 
-    return ren_df
+        return ren_df
 
 def get_annual_industry_data(year, engine,
                              par_list=['Tot-N', 'Tot-P']):
@@ -506,19 +732,26 @@ def get_annual_industry_data(year, engine,
 
     ind_df = pd.read_sql(sql, engine)
 
-    # Pivot
-    ind_df = ind_df.pivot(index='regine', columns='name', values='value')
+    # Only continue if data
+    if len(ind_df) == 0:
+        print 'No industry data for %s.' % year
+        
+        return None
 
-    # Tidy
-    ind_df = ind_df[par_list]
-    cols = ['ind_%s_tonnes' % i.lower() for i in ind_df.columns]
-    ind_df.columns = cols
-    ind_df.columns.name = ''
-    ind_df.reset_index(inplace=True)
-    ind_df.dropna(subset=['regine',], inplace=True)
-    ind_df.dropna(subset=cols, how='all', inplace=True)
+    else:
+        # Pivot
+        ind_df = ind_df.pivot(index='regine', columns='name', values='value')
 
-    return ind_df
+        # Tidy
+        ind_df = ind_df[par_list]
+        cols = ['ind_%s_tonnes' % i.lower() for i in ind_df.columns]
+        ind_df.columns = cols
+        ind_df.columns.name = ''
+        ind_df.reset_index(inplace=True)
+        ind_df.dropna(subset=['regine',], inplace=True)
+        ind_df.dropna(subset=cols, how='all', inplace=True)
+
+        return ind_df
 
 def get_annual_vassdrag_mean_flows(year, engine):
     """ Get annual flow data for main NVE vassdrags based on 
@@ -584,7 +817,7 @@ def get_annual_agricultural_coefficients(year, engine):
 
     # Read LU areas (same values used every year)
     in_csv = (r'C:\Data\James_Work\Staff\Oeyvind_K\Elveovervakingsprogrammet'
-              r'\NOPE\NOPE_Input_Data\fysone_land_areas.csv')
+              r'\NOPE\NOPE_Core_Input_Data\fysone_land_areas.csv')
     lu_areas = pd.read_csv(in_csv, sep=';')
     lu_areas['fysone_name'] = lu_areas['fysone_name'].str.decode('windows-1252')
 
@@ -593,6 +826,10 @@ def get_annual_agricultural_coefficients(year, engine):
            "WHERE year = %s" % year)
     lu_lds = pd.read_sql(sql, engine)
     del lu_lds['year']
+    
+    # Check have data
+    if len(lu_lds) == 0:
+        print 'No agricultural land use coefficients for %s.' % year
 
     # Join
     lu_df = pd.merge(lu_lds, lu_areas, how='outer',
@@ -615,7 +852,7 @@ def get_annual_agricultural_coefficients(year, engine):
             'agri_back_tot-p_kg/km2', 'a_fy_agri_km2', 'a_fy_eng_km2']
     
     lu_df = lu_df[cols]
-    
+
     return lu_df
 
 def make_rid_input_file(year, engine, nope_fold, out_csv,
@@ -752,21 +989,18 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     
     # 3. Point sources
     # 3.1. Aqu, ren, ind
+    # List of data to concat later
+    df_list = [df,]
+    
     # Set indices
-    # Aqua
-    aqu_df.index = aqu_df['regine']
-    del aqu_df['regine']
-
-    # Rense
-    ren_df.index = ren_df['regine']
-    del ren_df['regine']
-
-    # Industry
-    ind_df.index = ind_df['regine']
-    del ind_df['regine']
-
+    for pt_df in [aqu_df, ren_df, ind_df]:
+        if pt_df is not None:
+            pt_df.index = pt_df['regine']
+            del pt_df['regine']
+            df_list.append(pt_df)
+            
     # Join
-    df = pd.concat([df, aqu_df, ren_df, ind_df], axis=1)
+    df = pd.concat(df_list, axis=1)
     df.index.name = 'regine'
     df.reset_index(inplace=True)
 
@@ -774,7 +1008,10 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     for typ in ['aqu', 'ren', 'ind']:
         for par in par_list:
             col = '%s_%s_tonnes' % (typ, par)
-            df[col].fillna(value=0, inplace=True) 
+            if col in df.columns:
+                df[col].fillna(value=0, inplace=True) 
+            else: # Create cols of zeros
+                df[col] = 0
         
     # 3.2. Spr
     # Get total land area and area of cultivated land in each kommune
@@ -783,13 +1020,18 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     kom_df.reset_index(inplace=True)
     kom_df.columns = ['komnr', 'a_kom_km2', 'a_agri_kom_km2']
 
-    # Join 'spredt' to kommune areas
-    kom_df = pd.merge(kom_df, spr_df,
-                      how='left', on='komnr')
-
+    if spr_df is not None:
+        # Join 'spredt' to kommune areas
+        kom_df = pd.merge(kom_df, spr_df,
+                          how='left', on='komnr')
+        
+    else: # Create cols of zeros
+        for par in par_list:
+            kom_df['spr_%s_tonnes' % par.lower()] = 0
+            
     # Join back to main df
     df = pd.merge(df, kom_df,
-                  how='left', on='komnr')
+                  how='left', on='komnr')   
 
     # Distribute loads
     for par in par_list:       
@@ -834,7 +1076,7 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
 
         # Urban
         df['urban_%s_tonnes' % par] = (df['a_urban_km2'] * 
-                                      df['c_urban_kg/km2_%s' % par] /
+                                       df['c_urban_kg/km2_%s' % par] /
                                       1000)
 
         # Agri from Bioforsk
@@ -918,3 +1160,98 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     df.to_csv(out_csv, encoding='utf-8', index=False)
 
     return df
+
+def read_obs_data(cal_prop, seed=1):
+    """ Reads observed data file for 155 RID sites from 1990 to 2016. Joins in
+        basic station properties and splits into calibration and validation
+        datasets.
+    
+    Args:
+        cal_prop: Float. Between 0 and 1. Fraction of dataset to use for 
+                  calibration. The rest is for validation.
+        seed:     Int. For repeatability
+        
+    Returns:
+        Tuple (obs_df, cal_df, val_df). obs_df is the entire dataset
+    """
+    import pandas as pd
+    import numpy as np
+    
+    # Read obs data
+    in_csv = (r'C:\Data\James_Work\Staff\Oeyvind_K\Elveovervakingsprogrammet'
+              r'\NOPE\NOPE_RID_Calibration_Data\rid_all_obs_loads_flows_1990_2016.csv')
+    obs_df = pd.read_csv(in_csv)
+
+    # Drop NaN
+    obs_df.dropna(how='any', inplace=True)
+
+    # Read station data
+    in_xlsx = (r'C:\Data\James_Work\Staff\Oeyvind_K\Elveovervakingsprogrammet'
+               r'\Data\RID_Sites_List.xlsx')
+    stn_df = pd.read_excel(in_xlsx, sheetname='RID_All')
+    stn_df = stn_df[['station_id', 'nve_vassdrag_nr', 'rid_group']]
+
+    # Join vassdrag nrs
+    obs_df = pd.merge(obs_df, stn_df, how='left', on='station_id')
+
+    # Split cal and val
+    # NB: obs_df.sample randomises the rows, then np.split()
+    # divides data into chunks at the desired split points
+    cal_df, val_df = np.split(obs_df.sample(frac=1, random_state=seed),
+                              [int(cal_prop*len(obs_df)), ])
+
+    return (obs_df, cal_df, val_df)
+
+def build_input_dict(st_yr, end_yr, par_list):
+    """ Build a dictionary of input data for running NOPE in calibration
+        mode. Designed to improve performance compared to looping over
+        dataframes.
+        
+    Args:
+        st_yr:    Int. Start year of interest
+        end_yr:   Int. Start year of interest
+        par_list: List. Parameters of interest
+        
+    Returns:
+        Dict with keys ('regine', year) => {'variable':value}
+    """
+    import pandas as pd
+    import os
+
+    # Annual input folder
+    nope_fold = (r'C:\Data\James_Work\Staff\Oeyvind_K\Elveovervakingsprogrammet'
+                 r'\NOPE\NOPE_Annual_Inputs')
+
+    # Container for output
+    df_list = []
+
+    # Loop over CSV
+    for year in range(st_yr, end_yr+1):
+        # Read data
+        in_csv = os.path.join(nope_fold, 'nope_input_data_%s.csv' % year)
+        df = pd.read_csv(in_csv)
+
+        # Add year
+        df['year'] = year
+
+        # Add to output
+        df_list.append(df)
+
+    # Combine
+    df = pd.concat(df_list, axis=0)
+    
+    # Add diffuse
+    for par in par_list:
+        df['all_diff_%s_tonnes' % par] = (df['nat_diff_%s_tonnes' % par] +
+                                          df['anth_diff_%s_tonnes' % par])        
+
+    # Get cols of interest
+    par_cols = ['trans_%s', 'all_point_%s_tonnes', 'all_diff_%s_tonnes']
+    cols = (['regine', 'year', 'q_reg_m3/s',] + 
+            [i % j for i in par_cols for j in par_list])
+    df = df[cols]
+
+    # Convert to dict for speed later
+    in_data = df.set_index(['regine', 'year']).T.to_dict()
+    
+    return in_data
