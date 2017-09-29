@@ -1122,6 +1122,284 @@ def write_word_loads_table(stn_df, loads_csv, in_docx, engine):
     doc.save(in_docx)
 
     print 'Finished.'
+
+def write_word_overall_table(mon_df, umon_df, in_docx):
+    """ Creates Word tables summarising overall loads for the RID project.
+        This code is VERY messy and needs tidying up!
+    
+    Args:
+        mon_df:  Dataframe of monitoring results, created in section 4
+                 of word_data_tables.ipynb
+        umon_df: Dataframe of modelling results, created in section 4
+                 of word_data_tables.ipynb
+        in_docx: Str. Raw path to Word document. This should be a
+                 *COPY* of rid_loads_overall_summary_template.docx. Do
+                 not use the original template as the files will be 
+                 modified
+        
+    Returns:
+        None. The specified Word document is modified and saved.
+    """
+    import pandas as pd
+    import numpy as np
+    from docx import Document
+    from docx.shared import Pt
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    # Dicts mapping df cols to Word cols
+    reg_dict = {'TOTAL NORWAY':'NORWAY',
+                'SKAGGERAK':'SKAGERAK',
+                'NORTH SEA':'NORTH SEA',
+                'NORWEGIAN SEA':'NORWEGIAN SEA2',
+                'LOFOTEN/BARENTS SEA':'LOFOTEN-BARENTS SEA'}
+
+    grp_dict = {'rid_11':'Main Rivers (11)',
+                'rid_36':'Tributary Rivers (36)',
+                'rid_108':'Tributary Rivers (108)'}
+
+    par_dict = {'Flow rate':'flow', 
+                'SPM':'S.P.M.',
+                'TOC':'TOC',
+                'PO4-P':'po4',
+                'TOTP':'p',
+                'NO3-N':'no3', 
+                'NH4-N':'nh4',
+                'TOTN':'n',
+                'SiO2':None,
+                'Ag':None,
+                'As':'As',
+                'Pb':'Pb',
+                'Cd':'Cd', 
+                'Cu':'Cu',
+                'Zn':'Zn',
+                'Ni':'Ni',
+                'Cr':'Cr',
+                'Hg':'Hg'}
+
+    typ_dict = {'Sewage Effluents':'sew',
+                'Industrial Effluents':'ind',
+                'Fish Farming':'fish'}
+
+    # Chem pars of interest
+    par_list = ['Flow rate', 'SPM', 'TOC', 'PO4-P', 'TOTP', 'NO3-N', 
+                'NH4-N', 'TOTN', 'SiO2', 'Ag', 'As', 'Pb', 'Cd', 
+                'Cu', 'Zn', 'Ni', 'Cr', 'Hg']
+
+    # Open the document
+    doc = Document(in_docx)
+
+    # Set styles for 'Normal' template in this doc
+    style = doc.styles['Normal']
+
+    font = style.font
+    font.name = 'Times New Roman'
+    font.size = Pt(8)
+
+    p_format = style.paragraph_format
+    p_format.space_before = Pt(0)
+    p_format.space_after = Pt(0)
+
+    # 1. Fill-in observed data
+    # Loop over tables
+    for tab_id, tab in enumerate(doc.tables):
+        # Get region name
+        reg = tab.cell(0, 0).text
+        reg_df = reg_dict[reg]
+
+        # Extract text to index rows
+        row_dict = {}
+        for idx, cell in enumerate(tab.column_cells(0)):
+            for paragraph in cell.paragraphs:
+                row_dict[paragraph.text] = idx 
+
+        # Extract text to index cols
+        col_dict = {}
+        for idx, cell in enumerate(tab.row_cells(0)):
+            for paragraph in cell.paragraphs:
+                col_dict[paragraph.text] = idx 
+
+        # Loop over pars
+        for par in par_list:
+            # Get vals for RID groups
+            df = mon_df.loc[reg_df][[par]]
+
+            # Write total rows
+            tot = round(df.values.sum(), 0)
+
+            # Handle NaN
+            if np.isnan(tot):
+                tot = '0'
+            else:
+                tot = str(int(tot))
+
+            # Update doc
+            update_cell('Total Riverine Inputs', par, tot,
+                        col_dict, row_dict, tab)
+
+            # Loop over df
+            for idx, row in df.iterrows():
+                # Get value
+                val = round(row[par], 0)
+
+                # Handle NaN
+                if np.isnan(val):
+                    val = '0'
+                else:
+                    val = str(int(val))
+
+                # Write values
+                update_cell(grp_dict[idx], par, val,
+                            col_dict, row_dict, tab)
+
+    # 2. Fill-in "direct" discharges
+    # Loop over tables
+    for tab_id, tab in enumerate(doc.tables):
+        # Get region name
+        reg = tab.cell(0, 0).text
+        reg_df = reg_dict[reg]
+
+        # Extract text to index rows
+        row_dict = {}
+        for idx, cell in enumerate(tab.column_cells(0)):
+            for paragraph in cell.paragraphs:
+                row_dict[paragraph.text] = idx 
+
+        # Extract text to index cols
+        col_dict = {}
+        for idx, cell in enumerate(tab.row_cells(0)):
+            for paragraph in cell.paragraphs:
+                col_dict[paragraph.text] = idx 
+
+        # Loop over pars
+        for par in par_list:
+            # Only process relevant rows
+            if par_dict[par]:
+                # Flow
+                if par == 'Flow rate':
+                    pass
+
+                else:
+                    # Get vals for sew, ind and aqu
+                    try:
+                        sew = umon_df.loc[reg_df]['sew_'+par_dict[par]]
+                    except KeyError:
+                        sew = np.nan
+
+                    try:
+                        ind = umon_df.loc[reg_df]['ind_'+par_dict[par]]
+                    except KeyError:
+                        ind = np.nan
+
+                    try:
+                        aqu = umon_df.loc[reg_df]['fish_'+par_dict[par]]
+                    except KeyError:
+                        aqu = np.nan
+
+                    # Get totals
+                    tot = np.array([sew, ind, aqu])
+                    tot = np.nansum(tot)
+                    if tot == 0:
+                        tot = ''
+                    else:
+                        tot = str(int(round(tot)))                    
+
+                    # Format numbers
+                    if np.isnan(sew):
+                        sew = ''
+                    else:
+                        sew = str(int(round(sew)))
+
+                    if np.isnan(ind):
+                        ind = ''
+                    else:
+                        ind = str(int(round(ind)))
+
+                    if np.isnan(aqu):
+                        aqu = ''
+                    else:
+                        aqu = str(int(round(aqu)))
+
+                    # Update values
+                    update_cell('Sewage Effluents', par, sew,
+                                col_dict, row_dict, tab)
+
+                    update_cell('Industrial Effluents', par, ind,
+                                col_dict, row_dict, tab)
+
+                    update_cell('Fish Farming', par, aqu,
+                                col_dict, row_dict, tab)
+
+                    update_cell('Total Direct Inputs', par, tot,
+                                col_dict, row_dict, tab)
+
+    # 3. Process "diffuse"
+    for tab_id, tab in enumerate(doc.tables):
+        # Get region name
+        reg = tab.cell(0, 0).text
+        reg_df = reg_dict[reg]
+
+        # Extract text to index rows
+        row_dict = {}
+        for idx, cell in enumerate(tab.column_cells(0)):
+            for paragraph in cell.paragraphs:
+                row_dict[paragraph.text] = idx 
+
+        # Extract text to index cols
+        col_dict = {}
+        for idx, cell in enumerate(tab.row_cells(0)):
+            for paragraph in cell.paragraphs:
+                col_dict[paragraph.text] = idx 
+
+        # Loop over pars
+        for par in ['Flow rate', 'PO4-P', 'TOTP', 'NO3-N', 'NH4-N', 'TOTN']:
+            if par == 'Flow rate':
+                val = str(int(round(umon_df.loc[reg_df][par_dict[par]], 0)))
+            else:
+                val = str(int(round(umon_df.loc[reg_df]['diff_'+par_dict[par]], 0)))
+
+            # Write values. 'Unmonitored values' is in the Word template,
+            # but the text is coloured grey so that it's invisible
+            update_cell('Unmonitored values', par, val,
+                        col_dict, row_dict, tab)
+
+    # 4. Process region totals
+    for tab_id, tab in enumerate(doc.tables):
+        # Extract text to index rows
+        row_dict = {}
+        for idx, cell in enumerate(tab.column_cells(0)):
+            for paragraph in cell.paragraphs:
+                row_dict[paragraph.text] = idx 
+
+        # Extract text to index cols
+        col_dict = {}
+        for idx, cell in enumerate(tab.row_cells(0)):
+            for paragraph in cell.paragraphs:
+                col_dict[paragraph.text] = idx 
+
+        for idx, par in enumerate(par_list):
+            riv = tab.cell(6, idx+1).text
+            direc = tab.cell(11, idx+1).text
+            umon = tab.cell(13, idx+1).text
+
+            # Get total
+            tot = 0
+            for val in [riv, direc, umon]:
+                if val == '':
+                    pass
+                else:
+                    tot += int(val)
+
+            tot = str(int(tot))
+
+            # Write values. 'Unmonitored values' is in the Word template,
+            # but the text is coloured grey so that it's invisible
+            update_cell('Region values', par, tot,
+                        col_dict, row_dict, tab)
+
+    # Save after each table
+    doc.save(in_docx)
+    
+    print 'Finished.'
     
 def identify_point_in_polygon(pt_df, 
                               poly_shp, 
