@@ -41,3 +41,5 @@ Links to the annual data processing are provided below.
  4. **[Processing annual inputs for 2016](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/process_model_inputs_2016.ipynb)**. Restructuring the land use, sewage, industry and fish farm datasets for 2016 and adding them to the database.
  
  5. **[Estimation of pollutant loads for unmonitored areas in 2016](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2016.ipynb)**. Using NOPE to estimate total N and P in unmonitored regions for 2016, and summing point discharges for metals.
+ 
+ 6. **[Generate overall summary table](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/summary_table_2016.ipynb)**. Combine monitored and modelled outputs to generate a set of tables summarising national scale pollutant loads.
