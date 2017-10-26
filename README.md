@@ -43,3 +43,5 @@ Links to the annual data processing are provided below.
  5. **[Estimation of pollutant loads for unmonitored areas in 2016](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2016.ipynb)**. Using NOPE to estimate total N and P in unmonitored regions for 2016, and summing point discharges for metals.
  
  6. **[Generate overall summary table](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/summary_table_2016.ipynb)**. Combine monitored and modelled outputs to generate a set of tables summarising national scale pollutant loads.
+ 
+ 7. **[Fill-in OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template.ipynb)**. Summary results from the from the project as a whole are aggregated and reported to OSPAR in a single Excel template.
