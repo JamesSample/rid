@@ -664,6 +664,9 @@ def write_csv_water_chem(stn_df, year, csv_path, engine):
                                             '%s-01-01' % year,
                                             '%s-12-31' % year,
                                             engine, plot=False)
+        
+        if len(wc_df) == 0:
+            raise ValueError('No chemistry data found for station ID %s.' % stn_id) 
 
         # Get list of cols of interest for later
         cols = wc_df.columns
