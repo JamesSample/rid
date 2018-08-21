@@ -45,3 +45,9 @@ Links to the annual data processing are provided below.
  6. **[Generate overall summary table](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/summary_table_2016.ipynb)**. Combine monitored and modelled outputs to generate a set of tables summarising national scale pollutant loads.
  
  7. **[Fill-in OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template.ipynb)**. Summary results from the from the project as a whole are aggregated and reported to OSPAR in a single Excel template.
+
+## 2017/18
+
+ 1. **[Changes to the programme for 2017 to 2020](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/programme_changes_2017-18.ipynb)**. The monitoring programme for 2017 to 2020 is different to that followed previously. This notebook describes the main changes and implications for subsequent analyses.
+ 
+ 2. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_working_2017-18.ipynb)**. Empirical load estimation using 2017 data for the 155 water chemistry stations.
