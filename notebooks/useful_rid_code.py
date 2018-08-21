@@ -14,19 +14,27 @@
     C:\Data\James_Work\Staff\Heleen_d_W\ICP_Waters\Upload_Template\useful_resa2_code.py
 """
 
-def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
+def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False,
+                       samp_sel=None):
     """ Extracts time series for the specified station and parameters. Returns 
         a dataframe of chemistry and LOD values, a dataframe of duplicates and,
         optionally, an interactive grid plot.
 
     Args:
-        stn_id:    Int. Valid RESA2 STATION_ID
-        par_list:  List of valid RESA2 PARAMETER_NAMES
-        st_dt:     Str. Start date as 'yyyy-mm-dd'
-        end_dt:    Str. End date as 'yyyy-mm-dd'
-        engine:    SQL-Alchemy 'engine' object already connected to RESA2
-        plot:      Bool. Choose whether to return a grid plot as well as the 
-                   dataframe
+        stn_id:   Int. Valid RESA2 STATION_ID
+        par_list: List of valid RESA2 PARAMETER_NAMES
+        st_dt:    Str. Start date as 'yyyy-mm-dd'
+        end_dt:   Str. End date as 'yyyy-mm-dd'
+        engine:   SQL-Alchemy 'engine' object already connected to RESA2
+        plot:     Bool. Choose whether to return a grid plot as well as the 
+                  dataframe
+        samp_sel: Int or None. If None, extract all samples for stn_id. If Int,
+                  filter samples to include only those associated with this
+                  sample_selection_id. Sample selections are defined in
+                  RESA2.SAMPLE_SELECTION_DEFINITIONS and RESA2.SAMPLE_SELECTIONS.
+                  See:
+                  http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/programme_changes_2017-18.ipynb
+                  for details
 
     Returns:
         If plot is False, returns (chem_df, dup_df), otherwise
@@ -74,7 +82,21 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False):
                                      st_dt))    
 
     wc_df = pd.read_sql_query(sql, engine)
-    
+
+    # If desired, subset according to sample selection
+    if samp_sel:
+        assert isinstance(samp_sel, int), '"samp_sel" must be of type "Int".'
+        
+        # Get list of samples in this selection
+        sql = ("SELECT water_sample_id "
+               "FROM resa2.sample_selections "
+               "WHERE sample_selection_id = %s" % samp_sel)
+        
+        samp_sel_df = pd.read_sql_query(sql, engine)
+
+        # Filter wc_df based on these sample_ids
+        wc_df = wc_df.query('sample_id in %s' % str(tuple(samp_sel_df['water_sample_id'].values)))
+        
     # Get all sample dates for sites and period of interest
     sql = ("SELECT water_sample_id, station_id, sample_date "
            "FROM resa2.water_samples "
@@ -369,7 +391,7 @@ def adjust_lod_values(wc_df):
 
     return wc_df
     
-def estimate_loads(stn_id, par_list, year, engine, infer_missing=True):
+def estimate_loads(stn_id, par_list, year, engine, infer_missing=True, samp_sel=None):
     """ Estimates annual pollutant loads for specified site and year.
         
     Args:
@@ -380,6 +402,8 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True):
                        RESA2
         infer_missing: Whether to estimate data for missing years using
                        simple regression (see notebook for full details)
+        samp_sel:      Int or None. Passed to extract_water_chem - see 
+                       doc-string for details
     
     Returns:
         Dataframe of annual loads. If infer_missing=True, '_Est' columns
@@ -416,12 +440,13 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True):
     wc_df, dup_df = extract_water_chem(stn_id, par_list, 
                                        '%s-01-01' % year,
                                        '%s-12-31' % year,
-                                       engine, plot=False)
+                                       engine, plot=False,
+                                       samp_sel=samp_sel)
 
     # Estimate missing values
     if infer_missing:
-        wc_df = estimate_missing_data(wc_df, stn_id, par_list, 
-                                      year, engine)
+        wc_df = estimate_missing_data(wc_df, stn_id, par_list, year, 
+                                      engine, samp_sel=samp_sel)
            
     if len(wc_df) > 0:
         # Get flow data
@@ -522,7 +547,7 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True):
 
         return l_df
 
-def estimate_missing_data(wc_df, stn_id, par_list, year, engine):
+def estimate_missing_data(wc_df, stn_id, par_list, year, engine, samp_sel=None):
     """ If observations are not available for the station-parameter(s)-year
         specified, this function will impute values using approximately the
         methodology coded previously by Tore. See RESA2 procedures
@@ -535,7 +560,9 @@ def estimate_missing_data(wc_df, stn_id, par_list, year, engine):
         par_list: List of RESA2 parameters of interest
         year:     Int. Year of interest
         engine:   SQL-Alchemy 'engine' object already connected to RESA2
-    
+        samp_sel: Int or None. Passed to extract_water_chem - see 
+                  doc-string for details
+                       
     Returns:
         Modifed version of wc_df, with estimated values for any missing
         parameters in the specified years
@@ -556,7 +583,7 @@ def estimate_missing_data(wc_df, stn_id, par_list, year, engine):
         wc_ts, dup_ts = extract_water_chem(stn_id, mis_par_list, 
                                            '1990-01-01',
                                            '%s-12-31' % (dt.datetime.now().year - 1),
-                                           engine, plot=False)
+                                           engine, plot=False, samp_sel=samp_sel)
 
         # Dict to store estimated values
         est_dict = {}
@@ -631,7 +658,7 @@ def estimate_missing_data(wc_df, stn_id, par_list, year, engine):
 
     return wc_df
 
-def write_csv_water_chem(stn_df, year, csv_path, engine):
+def write_csv_water_chem(stn_df, year, csv_path, engine, samp_sel=None):
     """ Creates  CSV summarising flow and water chemistry data
         for the RID_11 and RID_36 stations. Replaces Tore's 
         NIVA.RESAEXTENSIONS Visual Studio project.
@@ -642,7 +669,8 @@ def write_csv_water_chem(stn_df, year, csv_path, engine):
         year:     Int. Year of interest
         csv_path: Filename for CSV
         engine:   SQL-Alchemy 'engine' object already connected to RESA2
-        
+        samp_sel: Int or None. Passed to extract_water_chem - see 
+                  doc-string for details        
     Returns:
         Dataframe. The CSV is saved.
     """
@@ -663,7 +691,8 @@ def write_csv_water_chem(stn_df, year, csv_path, engine):
         wc_df, dup_df  = extract_water_chem(stn_id, par_list, 
                                             '%s-01-01' % year,
                                             '%s-12-31' % year,
-                                            engine, plot=False)
+                                            engine, plot=False,
+                                            samp_sel=samp_sel)
         
         if len(wc_df) == 0:
             raise ValueError('No chemistry data found for station ID %s.' % stn_id) 
@@ -714,8 +743,8 @@ def write_csv_water_chem(stn_df, year, csv_path, engine):
     df = pd.merge(stn_df, df, how='left', on='station_id')
     
     # Reorder cols and tidy
-    st_cols = ['station_id', 'station_code', 'station_name', 'rid_group', 
-               'ospar_region', 'sample_date', 'Qs_m3/s']
+    st_cols = ['station_id', 'station_code', 'station_name', 'old_rid_group', 
+               'new_rid_group', 'ospar_region', 'sample_date', 'Qs_m3/s']
     unwant_cols = ['nve_vassdrag_nr', 'lat', 'lon', 'utm_north', 'utm_east', 
                    'utm_zone', 'station_type'] 
     par_cols = [i for i in df.columns if i not in (st_cols+unwant_cols)]
@@ -782,20 +811,22 @@ def update_cell(row_txt, par_txt, value,
     p = tab.cell(row, col).paragraphs[0]
     p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
 
-def write_word_water_chem_tables(stn_df, year, in_docx, engine):
+def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
     """ Creates Word tables summarising flow and water chemistry data
         for the RID_11 and RID_36 stations. Replaces Tore's 
         NIVA.RESAEXTENSIONS Visual Studio project.
     
     Args:
-        stn_df:  Dataframe listing the 47 sites of interest. Must
-                 include [station_id, station_code, station_name]
-        year:    Int. Year of interest
-        in_docx: Str. Raw path to Word document. This should be a
-                 *COPY* of rid_water_chem_tables_template.docx. Do
-                 not use the original template as the files will be 
-                 modified
-        engine:  SQL-Alchemy 'engine' object already connected to RESA2
+        stn_df:   Dataframe listing the 47 sites of interest. Must
+                  include [station_id, station_code, station_name]
+        year:     Int. Year of interest
+        in_docx:  Str. Raw path to Word document. This should be a
+                  *COPY* of rid_water_chem_tables_template.docx. Do
+                  not use the original template as the files will be 
+                  modified
+        engine:   SQL-Alchemy 'engine' object already connected to RESA2
+        samp_sel: Int or None. Passed to extract_water_chem - see 
+                  doc-string for details
         
     Returns:
         None. The specified Word document is modified and saved.
@@ -841,7 +872,8 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine):
         wc_df, dup_df  = extract_water_chem(stn_id, par_list, 
                                             '%s-01-01' % year,
                                             '%s-12-31' % year,
-                                            engine, plot=False)
+                                            engine, plot=False,
+                                            samp_sel=samp_sel)
 
         # Get list of cols of interest for later
         cols = wc_df.columns
