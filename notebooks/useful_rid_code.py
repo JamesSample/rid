@@ -695,68 +695,69 @@ def write_csv_water_chem(stn_df, year, csv_path, engine, samp_sel=None):
                                             samp_sel=samp_sel)
         
         if len(wc_df) == 0:
-            raise ValueError('No chemistry data found for station ID %s.' % stn_id) 
-
-        # Get list of cols of interest for later
-        cols = wc_df.columns
-        par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
-        par_unit_list.append('Qs_m3/s')
-
-        # Add date col (ignoring time)
-        wc_df['date'] = wc_df.index.date
-
-        # Reset index
-        wc_df.reset_index(inplace=True)
-
-        print '    Extracting flow data...'
-
-        # Get flow data
-        q_df = extract_discharge(stn_id, 
-                                 '%s-01-01' % year,
-                                 '%s-12-31' % year,
-                                 engine, plot=False)
-
-        # Add date col (ignoring time)
-        q_df['date'] = q_df.index.date
-
-        # Join flows to chem
-        df = pd.merge(wc_df, q_df, how='left', on='date')
-
-        # Set index
-        df.index = df['sample_date']
+            print 'No chemistry data found for station ID %s.' % stn_id
         
-        # Add station id
-        df['station_id'] = stn_id
+        else:
+            # Get list of cols of interest for later
+            cols = wc_df.columns
+            par_unit_list = [i for i in cols if i.split('_')[1] != 'flag']
+            par_unit_list.append('Qs_m3/s')
 
-        # Tidy
-        df['Qs_m3/s'] = df['flow_m3/s']
-        del df['date'], df['flow_m3/s'], df['sample_date']
-        df.sort_index(inplace=True)   
-        df.reset_index(inplace=True)
+            # Add date col (ignoring time)
+            wc_df['date'] = wc_df.index.date
 
-        df_list.append(df)
+            # Reset index
+            wc_df.reset_index(inplace=True)
 
-    # Build df
-    df = pd.concat(df_list, axis=0)
-    
-    # Join stn details
-    df = pd.merge(stn_df, df, how='left', on='station_id')
-    
-    # Reorder cols and tidy
-    st_cols = ['station_id', 'station_code', 'station_name', 'old_rid_group', 
-               'new_rid_group', 'ospar_region', 'sample_date', 'Qs_m3/s']
-    unwant_cols = ['nve_vassdrag_nr', 'lat', 'lon', 'utm_north', 'utm_east', 
-                   'utm_zone', 'station_type'] 
-    par_cols = [i for i in df.columns if i not in (st_cols+unwant_cols)]
-    par_cols.sort()
+            print '    Extracting flow data...'
 
-    for col in unwant_cols:
-        del df[col]
+            # Get flow data
+            q_df = extract_discharge(stn_id, 
+                                     '%s-01-01' % year,
+                                     '%s-12-31' % year,
+                                     engine, plot=False)
 
-    df = df[st_cols + par_cols]
-    
-    # Write output
-    df.to_csv(csv_path, index=False, encoding='utf-8')
+            # Add date col (ignoring time)
+            q_df['date'] = q_df.index.date
+
+            # Join flows to chem
+            df = pd.merge(wc_df, q_df, how='left', on='date')
+
+            # Set index
+            df.index = df['sample_date']
+
+            # Add station id
+            df['station_id'] = stn_id
+
+            # Tidy
+            df['Qs_m3/s'] = df['flow_m3/s']
+            del df['date'], df['flow_m3/s'], df['sample_date']
+            df.sort_index(inplace=True)   
+            df.reset_index(inplace=True)
+
+            df_list.append(df)
+
+        # Build df
+        df = pd.concat(df_list, axis=0)
+
+        # Join stn details
+        df = pd.merge(stn_df, df, how='left', on='station_id')
+
+        # Reorder cols and tidy
+        st_cols = ['station_id', 'station_code', 'station_name', 'old_rid_group', 
+                   'new_rid_group', 'ospar_region', 'sample_date', 'Qs_m3/s']
+        unwant_cols = ['nve_vassdrag_nr', 'lat', 'lon', 'utm_north', 'utm_east', 
+                       'utm_zone', 'station_type'] 
+        par_cols = [i for i in df.columns if i not in (st_cols+unwant_cols)]
+        par_cols.sort()
+
+        for col in unwant_cols:
+            del df[col]
+
+        df = df[st_cols + par_cols]
+
+        # Write output
+        df.to_csv(csv_path, index=False, encoding='utf-8')
 
     return df
 
