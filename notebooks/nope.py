@@ -887,8 +887,14 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
 
     # Read core NOPE inputs
     # 1. Regine network
-    csv_path = os.path.join(nope_fold, 'regine.csv')
-    reg_df = pd.read_csv(csv_path, index_col=0, sep=';')
+    # Changes to kommuner boundaries in 2017 require different files for 
+    # different years
+    if year < 2017: 
+        csv_path = os.path.join(nope_fold, 'regine_pre_2017.csv')
+        reg_df = pd.read_csv(csv_path, index_col=0, sep=';')
+    else:
+        csv_path = os.path.join(nope_fold, 'regine_2017_onwards.csv')
+        reg_df = pd.read_csv(csv_path, index_col=0, sep=';')
 
     # 2. Retention factors
     csv_path = os.path.join(nope_fold, 'retention.csv')
