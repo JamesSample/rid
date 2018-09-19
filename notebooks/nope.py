@@ -116,7 +116,7 @@ def build_calib_network(data, calib_node_set):
     g = g.subgraph(nd_set).copy()
     
     # Get topo node list
-    nd_list = nx.topological_sort(g)
+    nd_list = list(nx.topological_sort(g))
     
     return (g, nd_list)
 
@@ -150,10 +150,10 @@ def accumulate_loads(g, par_list):
                 'anth_diff_%s_tonnes', 'all_sources_%s_tonnes']
 
     # Process nodes in topo order from headwaters down
-    for nd in nx.topological_sort(g)[:-1]:
+    for nd in list(nx.topological_sort(g))[:-1]:
         # Get catchments directly upstream
-        preds = g.predecessors(nd)
-        
+        preds = list(g.predecessors(nd))
+
         if len(preds) > 0:
             # Accumulate total input from upstream
             # Counters default to 0
@@ -242,7 +242,7 @@ def update_and_accumulate(g, nd_list, year, data_dict, cal_pars, par_list, reg_s
         
         # Accumulate
         # Get catchments directly upstream
-        preds = g.predecessors(nd)
+        preds = list(g.predecessors(nd))
         
         if len(preds) > 0:
             # Accumulate total input from upstream
@@ -362,7 +362,7 @@ def plot_network(g, catch_id, direct='down', stat='accum',
         g2 = nx.dfs_tree(g, catch_id)
         
         # Update labels with 'quant'
-        for nd in nx.topological_sort(g2)[:-1]:
+        for nd in list(nx.topological_sort(g2))[:-1]:
             g2.node[nd]['label'] = '%s\n(%.2f)' % (nd, g.node[nd][stat][quant])  
             
     elif direct == 'up':
@@ -370,7 +370,7 @@ def plot_network(g, catch_id, direct='down', stat='accum',
         g2 = nx.dfs_tree(g.reverse(), catch_id).reverse()
 
         # Update labels with 'quant'
-        for nd in nx.topological_sort(g2):
+        for nd in list(nx.topological_sort(g2)):
             g2.node[nd]['label'] = '%s\n(%.2f)' % (nd, g.node[nd][stat][quant])  
             
     else:
@@ -409,7 +409,7 @@ def make_map(g, stat='accum', quant='q_m3/s', sqrt=False,
     reg_list = []
     par_list = []
 
-    for nd in nx.topological_sort(g)[:-1]:
+    for nd in list(nx.topological_sort(g))[:-1]:
         reg_list.append(g.node[nd]['local']['regine'])
         par_list.append(g.node[nd][stat][quant])
 
@@ -429,7 +429,7 @@ def make_map(g, stat='accum', quant='q_m3/s', sqrt=False,
 
     # Setup map
     fig = plt.figure(figsize=(12, 16))
-    ax = fig.add_subplot(111, axisbg='w', frame_on=False)
+    ax = fig.add_subplot(111, facecolor='w', frame_on=False)
 
     # Title
     tit = quant.split('_')
@@ -515,7 +515,7 @@ def model_to_dataframe(g, out_path=None):
     out_dict = defaultdict(list)
     
     # Loop over data
-    for nd in nx.topological_sort(g)[:-1]:
+    for nd in list(nx.topological_sort(g))[:-1]:
         for stat in ['local', 'accum']:
             for key in g.node[nd][stat]:
                 out_dict['%s_%s' % (stat, key)].append(g.node[nd][stat][key])
