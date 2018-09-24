@@ -838,10 +838,17 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
     from docx.shared import Pt
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-    # Chem pars of interest
-    par_list = ['pH', 'KOND', 'TURB860', 'SPM', 'TOC', 'PO4-P', 
-                'TOTP', 'NO3-N', 'NH4-N', 'TOTN', 'SiO2', 'Ag', 
-                'As', 'Pb', 'Cd', 'Cu', 'Zn', 'Ni', 'Cr', 'Hg']
+#    # Chem pars of interest (pre-2017)
+#    par_list = ['pH', 'KOND', 'TURB860', 'SPM', 'TOC', 'PO4-P', 
+#                'TOTP', 'NO3-N', 'NH4-N', 'TOTN', 'SiO2', 'Ag', 
+#                'As', 'Pb', 'Cd', 'Cu', 'Zn', 'Ni', 'Cr', 'Hg']
+   
+    # Chem pars of interest (2017 onwards; includes DOC, Part. C, TDP
+    # and Tot. Part. N) 
+    par_list = ['pH', 'KOND', 'TURB860', 'SPM', 'TOC', 'DOC', 'Part. C', 
+                'PO4-P', 'TOTP', 'TDP', 'NO3-N', 'NH4-N', 'TOTN', 
+                'Tot. Part. N', 'SiO2', 'Ag', 'As', 'Pb', 'Cd', 'Cu', 
+                'Zn', 'Ni', 'Cr', 'Hg']
 
     # Open the document
     doc = Document(in_docx)
@@ -919,7 +926,8 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
             cell = tab.cell(idx+3, 0) # Skip 3 rows of header
 
             # Modify value
-            cell.text = pd.to_datetime(str(dt)).strftime('%d.%m.%Y %H:%M')
+            #cell.text = pd.to_datetime(str(dt)).strftime('%d.%m.%Y %H:%M') # Used pre-2017
+            cell.text = pd.to_datetime(str(dt)).strftime('%d.%m.%Y')        # Used 2017 onwards to save space
 
             # Align right
             p = tab.cell(idx+3, 0).paragraphs[0]
@@ -956,7 +964,8 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
         # Loop over df cols
         for idx, df_row in df.iterrows():
             # Get the date
-            dt_tm = idx.strftime('%d.%m.%Y %H:%M')
+            #dt_tm = idx.strftime('%d.%m.%Y %H:%M') # Used pre-2017
+            dt_tm = idx.strftime('%d.%m.%Y')        # Used 2017 onwards to save space
 
             # Loop over variables
             for par_unit in par_unit_list:
@@ -970,6 +979,10 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
                     value = '<' + str(df_row[par_unit])
                 else:
                     value = df_row[par_unit]
+                
+                # Print NaN as blank
+                if pd.isnull(value):
+                    value = ''
                     
                 # Update the table
                 update_cell(dt_tm, par, value,
@@ -984,14 +997,17 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
         for df_col in par_unit_list:
             # Get just the par
             par = df_col.split('_')[0]
+            
+            # Get just data for this par
+            samp_df = df[[df_col, par+'_flag']].dropna(subset=[df_col,])
 
             # Calc statistics
             # 1. Lower av. - assume all LOD values are 0
             # Get vals
-            val_df = df[df_col].values.copy()
+            val_df = samp_df[df_col].values.copy()
 
             # Get LOD flags
-            lod_df = df[par+'_flag'].values
+            lod_df = samp_df[par+'_flag'].values
 
             # Update ONLY the LOD values
             val_df[(lod_df=='<')] = 0
@@ -1002,38 +1018,38 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
                         col_dict, row_dict, tab)   
 
             # 2. Upper av. - assume all LOD values are LOD
-            up_av = df[df_col].mean()
+            up_av = samp_df[df_col].mean()
             update_cell('Upper avg..', par, up_av,
                         col_dict, row_dict, tab)
 
             # 3. Min
-            par_min = df[df_col].min()
+            par_min = samp_df[df_col].min()
             update_cell('Minimum', par, par_min,
                         col_dict, row_dict, tab)
 
             # 4. Max
-            par_max = df[df_col].max()
+            par_max = samp_df[df_col].max()
             update_cell('Maximum', par, par_max,
                         col_dict, row_dict, tab)
 
             # 5. More than 70% above LOD?
-            lod_df = df[par+'_flag'].values
+            lod_df = samp_df[par+'_flag'].values
             pct_lod = (100.*(lod_df=='<').sum())/len(lod_df) # % at or below LOD
             pct_lod = 100 - pct_lod                          # % above LOD
             if pct_lod > 70:
                 lod_gt_70 = 'yes'
             else:
                 lod_gt_70 = 'no'
-            update_cell('More than 70%LOD', par, lod_gt_70,
+            update_cell('More than 70% >LOD', par, lod_gt_70,
                         col_dict, row_dict, tab)
 
             # 6. n samples
-            n_samps = len(df[[df_col]].dropna(how='any'))
+            n_samps = len(samp_df)
             update_cell('n', par, n_samps,
                         col_dict, row_dict, tab)
 
             # 7. Std. Dev.
-            par_std = df[df_col].std() 
+            par_std = samp_df[df_col].std() 
             update_cell('St.dev', par, par_std,
                         col_dict, row_dict, tab)
 
