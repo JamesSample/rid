@@ -51,3 +51,5 @@ Links to the annual data processing are provided below.
  1. **[Changes to the programme for 2017 to 2020](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/programme_changes_2017-18.ipynb)**. The monitoring programme for 2017 to 2020 is different to that followed previously. This notebook describes the main changes and implications for subsequent analyses.
  
  2. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_working_2017-18.ipynb)**. Empirical load estimation using 2017 data for the 155 water chemistry stations.
+ 
+ 3. **[Count Limit of Detection (LOD) values](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/detection_limit_summaries_2017.ipynb)**. Estimate the proportion of LOD values for each parameter during 2017.
