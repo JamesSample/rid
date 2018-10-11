@@ -26,6 +26,8 @@ The links below provide background to the project and develop code for the new p
  
  9. **[NOPE autocalibration](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/calibrating_nope.ipynb)**. Using Bayesian MCMC to calibrate and evaluate the new NOPE model.
  
+ 10. **[NOPE Metals](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/nope_metals_3.ipynb)**. Prototyping a new NOPE module for simulating metal fluxes.
+ 
 ## Annual data processing
 
 Links to the annual data processing are provided below.
