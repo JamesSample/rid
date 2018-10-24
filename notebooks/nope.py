@@ -814,19 +814,20 @@ def get_annual_agricultural_coefficients(year, engine):
         Dataframe
     """
     import pandas as pd
+    import os
 
     # Read LU areas (same values used every year)
     in_csv = (r'C:\Data\James_Work\Staff\Oeyvind_K\Elveovervakingsprogrammet'
               r'\NOPE\NOPE_Core_Input_Data\fysone_land_areas.csv')
-    lu_areas = pd.read_csv(in_csv, sep=';')
-    lu_areas['fysone_name'] = lu_areas['fysone_name'].str.decode('windows-1252')
+    lu_areas = pd.read_csv(in_csv, sep=';', encoding='windows-1252')
 
     # Read Bioforsk data
     sql = ("SELECT * FROM RESA2.RID_AGRI_INPUTS "
            "WHERE year = %s" % year)
     lu_lds = pd.read_sql(sql, engine)
     del lu_lds['year']
-    
+    lu_lds['omrade'] = lu_lds['omrade'].str.decode('utf-8')
+        
     # Check have data
     if len(lu_lds) == 0:
         print 'No agricultural land use coefficients for %s.' % year
@@ -834,7 +835,7 @@ def get_annual_agricultural_coefficients(year, engine):
     # Join
     lu_df = pd.merge(lu_lds, lu_areas, how='outer',
                      on='omrade')
-    
+
     # Calculate required columns
     # N
     lu_df['agri_diff_tot-n_kg/km2'] = lu_df['n_diff_kg'] / lu_df['a_fy_agri_km2']
@@ -895,7 +896,7 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     else:
         csv_path = os.path.join(nope_fold, 'regine_2017_onwards.csv')
         reg_df = pd.read_csv(csv_path, index_col=0, sep=';')
-
+    
     # 2. Retention factors
     csv_path = os.path.join(nope_fold, 'retention.csv')
     ret_df = pd.read_csv(csv_path, sep=';')
@@ -923,7 +924,7 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     # 1. Land use
     # 1.1 Land areas
     # Join lu datasets
-    area_df = pd.concat([reg_df, lc_df, la_df], axis=1)
+    area_df = pd.concat([reg_df, lc_df, la_df], axis=1, sort=True)
     area_df.index.name = 'regine'
     area_df.reset_index(inplace=True)
 
@@ -962,11 +963,11 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     
     # 1.2. Join background coeffs
     area_df = pd.merge(area_df, back_df, how='left', on='regine')
-    
+   
     # 1.3. Join agri coeffs
     area_df = pd.merge(area_df, fy_df, how='left', on='regine')
     area_df = pd.merge(area_df, agri_df, how='left', on='fylke_sone')
-    
+   
     # 2. Discharge
     # Sum LTA to vassom level
     lta_df = area_df[['vassom', 'q_reg_m3/s']].groupby('vassom').sum().reset_index()
@@ -1006,7 +1007,7 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
             df_list.append(pt_df)
             
     # Join
-    df = pd.concat(df_list, axis=1)
+    df = pd.concat(df_list, axis=1, sort=True)
     df.index.name = 'regine'
     df.reset_index(inplace=True)
 
@@ -1194,7 +1195,7 @@ def read_obs_data(cal_prop, seed=1):
     # Read station data
     in_xlsx = (r'C:\Data\James_Work\Staff\Oeyvind_K\Elveovervakingsprogrammet'
                r'\Data\RID_Sites_List.xlsx')
-    stn_df = pd.read_excel(in_xlsx, sheetname='RID_All')
+    stn_df = pd.read_excel(in_xlsx, sheet_name='RID_All')
     stn_df = stn_df[['station_id', 'nve_vassdrag_nr', 'rid_group']]
 
     # Join vassdrag nrs
