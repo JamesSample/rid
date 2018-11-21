@@ -1151,10 +1151,17 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     col_list = ['regine', 'regine_ned', 'a_reg_km2', 'runoff_mm/yr', 'q_reg_m3/s']
 
     # Param specific cols
-    par_cols = ['trans_%s', 'aqu_%s_tonnes', 'ind_%s_tonnes', 'ren_%s_tonnes', 
-                'spr_%s_tonnes', 'all_point_%s_tonnes', 'nat_diff_%s_tonnes',
-                'anth_diff_%s_tonnes', 'all_sources_%s_tonnes']
+#    par_cols = ['trans_%s', 'aqu_%s_tonnes', 'ind_%s_tonnes', 'ren_%s_tonnes', 
+#                'spr_%s_tonnes', 'all_point_%s_tonnes', 'nat_diff_%s_tonnes',
+#                'anth_diff_%s_tonnes', 'all_sources_%s_tonnes']
 
+    # Changed 21/11/2018. See e-mail from John Rune received 20/11/2018 at 16.15
+    # Now include 'urban' and 'agri_diff' as separate categories
+    par_cols = ['trans_%s', 'aqu_%s_tonnes', 'ind_%s_tonnes', 'ren_%s_tonnes', 
+                'spr_%s_tonnes', 'all_point_%s_tonnes', 'urban_%s_tonnes',
+                'agri_diff_%s_tonnes', 'nat_diff_%s_tonnes', 'anth_diff_%s_tonnes',
+                'all_sources_%s_tonnes']
+    
     # Build col list
     for name in par_cols:
         for par in par_list:            
