@@ -145,9 +145,16 @@ def accumulate_loads(g, par_list):
     assert nx.is_directed_acyclic_graph(g), 'g is not a valid DAG.'   
 
     # Param specific cols
+#    par_cols = ['aqu_%s_tonnes', 'ind_%s_tonnes', 'ren_%s_tonnes', 
+#                'spr_%s_tonnes', 'all_point_%s_tonnes', 'nat_diff_%s_tonnes',
+#                'anth_diff_%s_tonnes', 'all_sources_%s_tonnes']
+
+    # Changed 21/11/2018. See e-mail from John Rune received 20/11/2018 at 16.15
+    # Now include 'urban' and 'agri_diff' as separate categories
     par_cols = ['aqu_%s_tonnes', 'ind_%s_tonnes', 'ren_%s_tonnes', 
-                'spr_%s_tonnes', 'all_point_%s_tonnes', 'nat_diff_%s_tonnes',
-                'anth_diff_%s_tonnes', 'all_sources_%s_tonnes']
+                'spr_%s_tonnes', 'all_point_%s_tonnes', 'urban_%s_tonnes',
+                'agri_diff_%s_tonnes', 'nat_diff_%s_tonnes', 'anth_diff_%s_tonnes',
+                'all_sources_%s_tonnes']
 
     # Process nodes in topo order from headwaters down
     for nd in list(nx.topological_sort(g))[:-1]:
