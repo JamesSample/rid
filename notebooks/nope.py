@@ -152,9 +152,9 @@ def accumulate_loads(g, par_list):
     # Changed 21/11/2018. See e-mail from John Rune received 20/11/2018 at 16.15
     # Now include 'urban' and 'agri_diff' as separate categories
     par_cols = ['aqu_%s_tonnes', 'ind_%s_tonnes', 'ren_%s_tonnes', 
-                'spr_%s_tonnes', 'all_point_%s_tonnes', 'urban_%s_tonnes',
-                'agri_diff_%s_tonnes', 'nat_diff_%s_tonnes', 'anth_diff_%s_tonnes',
-                'all_sources_%s_tonnes']
+                'spr_%s_tonnes', 'agri_pt_%s_tonnes', 'all_point_%s_tonnes',
+                'urban_%s_tonnes', 'agri_diff_%s_tonnes', 'nat_diff_%s_tonnes',
+                'anth_diff_%s_tonnes', 'all_sources_%s_tonnes']
 
     # Process nodes in topo order from headwaters down
     for nd in list(nx.topological_sort(g))[:-1]:
@@ -576,7 +576,7 @@ def get_annual_spredt_data(year, engine,
     
     # Only continue if data
     if len(spr_df) == 0:
-        print 'No spredt data for %s.' % year
+        print ('No spredt data for %s.' % year)
         
         return None
         
@@ -631,7 +631,7 @@ def get_annual_aquaculture_data(year, engine,
 
     # Only continue if data
     if len(aqu_df) == 0:
-        print 'No aquaculture data for %s.' % year
+        print ('No aquaculture data for %s.' % year)
         
         return None
     
@@ -686,7 +686,7 @@ def get_annual_renseanlegg_data(year, engine,
 
     # Only continue if data
     if len(ren_df) == 0:
-        print 'No renseanlegg data for %s.' % year
+        print ('No renseanlegg data for %s.' % year)
         
         return None
     
@@ -741,7 +741,7 @@ def get_annual_industry_data(year, engine,
 
     # Only continue if data
     if len(ind_df) == 0:
-        print 'No industry data for %s.' % year
+        print ('No industry data for %s.' % year)
         
         return None
 
@@ -824,8 +824,7 @@ def get_annual_agricultural_coefficients(year, engine):
     import os
 
     # Read LU areas (same values used every year)
-    in_csv = (r'C:\Data\James_Work\Staff\Oeyvind_K\Elveovervakingsprogrammet'
-              r'\NOPE\NOPE_Core_Input_Data\fysone_land_areas.csv')
+    in_csv = r'../../../NOPE/NOPE_Core_Input_Data/fysone_land_areas.csv'
     lu_areas = pd.read_csv(in_csv, sep=';', encoding='windows-1252')
 
     # Read Bioforsk data
@@ -833,11 +832,10 @@ def get_annual_agricultural_coefficients(year, engine):
            "WHERE year = %s" % year)
     lu_lds = pd.read_sql(sql, engine)
     del lu_lds['year']
-    lu_lds['omrade'] = lu_lds['omrade'].str.decode('utf-8')
         
     # Check have data
     if len(lu_lds) == 0:
-        print 'No agricultural land use coefficients for %s.' % year
+        print ('No agricultural land use coefficients for %s.' % year)
 
     # Join
     lu_df = pd.merge(lu_lds, lu_areas, how='outer',
@@ -900,8 +898,11 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     if year < 2017: 
         csv_path = os.path.join(nope_fold, 'regine_pre_2017.csv')
         reg_df = pd.read_csv(csv_path, index_col=0, sep=';')
+    elif year == 2017:
+        csv_path = os.path.join(nope_fold, 'regine_2017.csv')
+        reg_df = pd.read_csv(csv_path, index_col=0, sep=';')
     else:
-        csv_path = os.path.join(nope_fold, 'regine_2017_onwards.csv')
+        csv_path = os.path.join(nope_fold, 'regine_2018_onwards.csv')
         reg_df = pd.read_csv(csv_path, index_col=0, sep=';')
     
     # 2. Retention factors
@@ -1158,9 +1159,9 @@ def make_rid_input_file(year, engine, nope_fold, out_csv,
     # Changed 21/11/2018. See e-mail from John Rune received 20/11/2018 at 16.15
     # Now include 'urban' and 'agri_diff' as separate categories
     par_cols = ['trans_%s', 'aqu_%s_tonnes', 'ind_%s_tonnes', 'ren_%s_tonnes', 
-                'spr_%s_tonnes', 'all_point_%s_tonnes', 'urban_%s_tonnes',
-                'agri_diff_%s_tonnes', 'nat_diff_%s_tonnes', 'anth_diff_%s_tonnes',
-                'all_sources_%s_tonnes']
+                'spr_%s_tonnes', 'agri_pt_%s_tonnes', 'all_point_%s_tonnes',
+                'urban_%s_tonnes', 'agri_diff_%s_tonnes', 'nat_diff_%s_tonnes',
+                'anth_diff_%s_tonnes', 'all_sources_%s_tonnes']
     
     # Build col list
     for name in par_cols:

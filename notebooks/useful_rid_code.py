@@ -8,11 +8,6 @@
 # Created:     13/06/2017
 # Copyright:   (c) James Sample and NIVA   
 #------------------------------------------------------------------------------
-""" This file contains useful functions for the updated RID analysis. Much of
-    this code is based on 
-    
-    C:\Data\James_Work\Staff\Heleen_d_W\ICP_Waters\Upload_Template\useful_resa2_code.py
-"""
 
 def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False,
                        samp_sel=None):
@@ -42,7 +37,6 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False,
     """
     import matplotlib.pyplot as plt 
     import datetime as dt
-    import mpld3
     import pandas as pd
     import seaborn as sn
 
@@ -226,8 +220,8 @@ def extract_water_chem(stn_id, par_list, st_dt, end_dt, engine, plot=False,
         plt.tight_layout()
         
     # Restructure df
-    wc_df['unit'] = wc_df['unit'].str.decode('windows-1252')
-    wc_df['par'] = wc_df['name'] + '_' + wc_df['unit'].map(unicode)
+    #wc_df['unit'] = wc_df['unit'].str.decode('windows-1252') # Not required for Python 3
+    wc_df['par'] = wc_df['name'] + '_' + wc_df['unit'].map(str)
     wc_df['flag'] = wc_df['name'] + '_flag'
     del wc_df['station_code'], wc_df['name'], wc_df['unit']
 
@@ -269,7 +263,6 @@ def extract_discharge(stn_id, st_dt, end_dt, engine, plot=False):
     """
     import matplotlib.pyplot as plt 
     import datetime as dt
-    import mpld3
     import pandas as pd
     import seaborn as sn
 
@@ -455,6 +448,7 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True, samp_sel=
                                  '%s-12-31' % year,
                                  engine, plot=False)
         q_df['date'] = q_df.index.date
+        q_df.reset_index(drop=True, inplace=True)
         
         # Total annual flow (Qr)
         sigma_q = q_df['flow_m3/s'].sum()*60*60*24
@@ -695,7 +689,7 @@ def write_csv_water_chem(stn_df, year, csv_path, engine, samp_sel=None):
                                             samp_sel=samp_sel)
         
         if len(wc_df) == 0:
-            print 'No chemistry data found for station ID %s.' % stn_id
+            print ('No chemistry data found for station ID %s.' % stn_id)
         
         else:
             # Get list of cols of interest for later
@@ -708,8 +702,8 @@ def write_csv_water_chem(stn_df, year, csv_path, engine, samp_sel=None):
 
             # Reset index
             wc_df.reset_index(inplace=True)
-
-            print '    Extracting flow data...'
+            
+            print ('    Extracting flow data...')
 
             # Get flow data
             q_df = extract_discharge(stn_id, 
@@ -719,10 +713,11 @@ def write_csv_water_chem(stn_df, year, csv_path, engine, samp_sel=None):
 
             # Add date col (ignoring time)
             q_df['date'] = q_df.index.date
+            q_df.reset_index(drop=True, inplace=True)
 
             # Join flows to chem
             df = pd.merge(wc_df, q_df, how='left', on='date')
-
+            
             # Set index
             df.index = df['sample_date']
 
@@ -869,12 +864,12 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
         # Get station name
         stn_name = tab.cell(0, 0).text
 
-        print 'Processing:', stn_name
+        print ('Processing:', stn_name)
 
         # Get station ID
         stn_id = stn_df.query('station_name == @stn_name')['station_id'].values[0]
 
-        print '    Extracting water chemistry data...'
+        print ('    Extracting water chemistry data...')
 
         # Get WC data
         wc_df, dup_df  = extract_water_chem(stn_id, par_list, 
@@ -894,7 +889,7 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
         # Reset index
         wc_df.reset_index(inplace=True)
 
-        print '    Extracting flow data...'
+        print ('    Extracting flow data...')
 
         # Get flow data
         q_df = extract_discharge(stn_id, 
@@ -904,6 +899,7 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
 
         # Add date col (ignoring time)
         q_df['date'] = q_df.index.date
+        q_df.reset_index(drop=True, inplace=True)
 
         # Join flows to chem
         df = pd.merge(wc_df, q_df, how='left', on='date')
@@ -916,7 +912,7 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
         del df['date'], df['flow_m3/s'], df['sample_date']
         df.sort_index(inplace=True)
 
-        print '    Writing sample dates...'
+        print ('    Writing sample dates...')
 
         # Write sample dates to first col
         dates = df.index.values
@@ -933,7 +929,7 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
             p = tab.cell(idx+3, 0).paragraphs[0]
             p.alignment = WD_ALIGN_PARAGRAPH.RIGHT 
 
-        print '    Deleting empty rows...'
+        print ('    Deleting empty rows...')
 
         # Delete empty rows (each blank table has space for 20 samples, but 
         # usually there are fewer)
@@ -947,7 +943,7 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
             row = tab.rows[idx]
             remove_row(tab, row)     
 
-        print '    Writing data values...'
+        print ('    Writing data values...')
 
         # Extract text to index rows
         row_dict = {}
@@ -988,7 +984,7 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
                 update_cell(dt_tm, par, value,
                             col_dict, row_dict, tab)
 
-        print '    Writing summary statistics...'
+        print ('    Writing summary statistics...')
 
         # Add flag col (all None) for Qs
         df['Qs_flag'] = None
@@ -1053,12 +1049,12 @@ def write_word_water_chem_tables(stn_df, year, in_docx, engine, samp_sel=None):
             update_cell('St.dev', par, par_std,
                         col_dict, row_dict, tab)
 
-        print '    Done.'
+        print ('    Done.')
 
         # Save after each table
         doc.save(in_docx)
 
-    print 'Finished.'
+    print ('Finished.')
     
 def write_word_loads_table(stn_df, loads_csv, in_docx, engine):
     """ Creates Word table summarising annual loads for the 155 main
@@ -1129,13 +1125,13 @@ def write_word_loads_table(stn_df, loads_csv, in_docx, engine):
             col_dict[paragraph.text] = idx 
 
     # Loop over sites
-    print 'Processing:'
+    print ('Processing:')
     for stn_id in stn_df['station_id']:
         # Get name and code
         name = stn_df.query('station_id == @stn_id')['station_name'].values[0]
         code = stn_df.query('station_id == @stn_id')['station_code'].values[0]
 
-        print '    %s (%s)...' % (name, code)
+        print ('    %s (%s)...' % (name, code))
         
         # Allow for sites with the same name
         if name in [u'Børselva', u'Oselva']:
@@ -1173,7 +1169,7 @@ def write_word_loads_table(stn_df, loads_csv, in_docx, engine):
     # Save after each table
     doc.save(in_docx)
 
-    print 'Finished.'
+    print( 'Finished.')
 
 def write_word_overall_table(mon_df, umon_df, in_docx):
     """ Creates Word tables summarising overall loads for the RID project.
@@ -1451,7 +1447,7 @@ def write_word_overall_table(mon_df, umon_df, in_docx):
     # Save after each table
     doc.save(in_docx)
     
-    print 'Finished.'
+    print ('Finished.')
 
 def write_word_overall_table_2017_20(mon_df, umon_df, in_docx):
     """ Creates Word tables summarising overall loads for the RID project.
@@ -1728,7 +1724,7 @@ def write_word_overall_table_2017_20(mon_df, umon_df, in_docx):
     # Save after each table
     doc.save(in_docx)
     
-    print 'Finished.'
+    print ('Finished.')
         
 def identify_point_in_polygon(pt_df, 
                               poly_shp, 
@@ -2129,17 +2125,17 @@ def get_prev_bio(row, df):
     loc = row.name[0]
     mon = row.name[1]
     spec = row.name[2]
-    
+
     # Get value for previous month
     if mon == 1:
         return 0
     else:
         try:
-            # Returns an IndexingError if data for (mon - 1)
+            # Returns a KeyError if data for (mon - 1)
             # do not exist
-            return df.ix[(loc, mon - 1, spec)]['biomass']
+            return df.loc[(loc, mon - 1, spec)]['biomass']
         
-        except pd.core.indexing.IndexingError:
+        except KeyError:
             return 0
         
 def calc_productivity(row):
