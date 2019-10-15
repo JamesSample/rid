@@ -58,8 +58,23 @@ Links to the annual data processing are provided below.
  
  4. **[Average monthly water temperatures for 2017](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/resa_temp_data.ipynb)**. Combining various temperature datasets to estimate mean monthly temperatures for the 20 main rivers. 
 
- 5. **[Processing annual inputs for 2017](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/process_model_inputs_2017.ipynb)**. Restructuring the land use, sewage, industry and fish farm datasets for 2016 and adding them to the database.
+ 5. **[Processing annual inputs for 2017](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/process_model_inputs_2017.ipynb)**. Restructuring the land use, sewage, industry and fish farm datasets for 2017 and adding them to the database.
  
- 6. **[Estimation of pollutant loads for unmonitored areas in 2017](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2017.ipynb)**. Using NOPE to estimate total N and P in unmonitored regions for 2016, and summing point discharges for metals.
+ 6. **[Estimation of pollutant loads for unmonitored areas in 2017](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2017.ipynb)**. Using NOPE to estimate total N and P in unmonitored regions for 2017, and summing point discharges for metals.
  
  7. **[Fill-in OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template_2017.ipynb)**. Summary results from the from the project as a whole are aggregated and reported to OSPAR in a single Excel template.
+ 
+ ## 2018/19
+
+ 1. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_working_2018-19.ipynb)**. Empirical load estimation using 2018 data for the 155 water chemistry stations.
+ 
+ 2. **[Count Limit of Detection (LOD) values](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/detection_limit_summaries_2018.ipynb)**. Estimate the proportion of LOD values for each parameter during 2018.
+ 
+> 3. **[Average monthly water temperatures for 2018](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/resa_temp_data.ipynb)**. Combining various temperature datasets to estimate mean monthly temperatures for the 20 main rivers. 
+
+ 4. **[Processing annual inputs for 2018](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/process_model_inputs_2018.ipynb)**. Restructuring the land use, sewage, industry and fish farm datasets for 2018 and adding them to the database.
+ 
+ 5. **[Estimation of pollutant loads for unmonitored areas in 2018](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2018.ipynb)**. Using NOPE to estimate total N and P in unmonitored regions for 2018, and summing point discharges for metals.
+ 
+ 6. **[Fill-in OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template_2018.ipynb)**. Summary results from the from the project as a whole are aggregated and reported to OSPAR in a single Excel template.
+
