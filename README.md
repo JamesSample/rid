@@ -70,7 +70,7 @@ Links to the annual data processing are provided below.
  
  2. **[Count Limit of Detection (LOD) values](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/detection_limit_summaries_2018.ipynb)**. Estimate the proportion of LOD values for each parameter during 2018.
  
-> 3. **[Average monthly water temperatures for 2018](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/resa_temp_data.ipynb)**. Combining various temperature datasets to estimate mean monthly temperatures for the 20 main rivers. 
+ 3. **[Average monthly water temperatures for 2018](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/avg_monthly_temp_rid20_2018.ipynb)**. Combining various temperature datasets to estimate mean monthly temperatures for the 20 main rivers. 
 
  4. **[Processing annual inputs for 2018](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/process_model_inputs_2018.ipynb)**. Restructuring the land use, sewage, industry and fish farm datasets for 2018 and adding them to the database.
  
