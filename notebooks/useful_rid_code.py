@@ -732,27 +732,27 @@ def write_csv_water_chem(stn_df, year, csv_path, engine, samp_sel=None):
 
             df_list.append(df)
 
-        # Build df
-        df = pd.concat(df_list, axis=0)
+    # Build df
+    df = pd.concat(df_list, axis=0)
 
-        # Join stn details
-        df = pd.merge(stn_df, df, how='left', on='station_id')
+    # Join stn details
+    df = pd.merge(stn_df, df, how='left', on='station_id')
 
-        # Reorder cols and tidy
-        st_cols = ['station_id', 'station_code', 'station_name', 'old_rid_group', 
-                   'new_rid_group', 'ospar_region', 'sample_date', 'Qs_m3/s']
-        unwant_cols = ['nve_vassdrag_nr', 'lat', 'lon', 'utm_north', 'utm_east', 
-                       'utm_zone', 'station_type'] 
-        par_cols = [i for i in df.columns if i not in (st_cols+unwant_cols)]
-        par_cols.sort()
+    # Reorder cols and tidy
+    st_cols = ['station_id', 'station_code', 'station_name', 'old_rid_group', 
+               'new_rid_group', 'ospar_region', 'sample_date', 'Qs_m3/s']
+    unwant_cols = ['nve_vassdrag_nr', 'lat', 'lon', 'utm_north', 'utm_east', 
+                   'utm_zone', 'station_type'] 
+    par_cols = [i for i in df.columns if i not in (st_cols+unwant_cols)]
+    par_cols.sort()
 
-        for col in unwant_cols:
-            del df[col]
+    for col in unwant_cols:
+        del df[col]
 
-        df = df[st_cols + par_cols]
+    df = df[st_cols + par_cols]
 
-        # Write output
-        df.to_csv(csv_path, index=False, encoding='utf-8')
+    # Write output
+    df.to_csv(csv_path, index=False, encoding='utf-8')
 
     return df
 
@@ -1160,7 +1160,7 @@ def write_word_loads_table(stn_df, loads_csv, in_docx, engine):
                 par_l = par + '_tonnes'
 
             # Get load value
-            load = lds_df.ix[stn_id, par_l]
+            load = lds_df.at[stn_id, par_l]
 
             # Update table
             update_cell(name, par, load,
@@ -1777,7 +1777,7 @@ def identify_point_in_polygon(pt_df,
     del pt_df2[lat_col], pt_df2[lon_col]
 
     # Set coordinate system as WGS84
-    pt_df2.crs = {"init": "epsg:4326"}
+    pt_df2.crs = "EPSG:4326"
 
     # Load Regine catchment shapefile (projected to WGS84)
     reg_gdf = gpd.GeoDataFrame.from_file(poly_shp)
