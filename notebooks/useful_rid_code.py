@@ -654,12 +654,12 @@ def estimate_missing_data(wc_df, stn_id, par_list, year, engine, samp_sel=None):
 
 def write_csv_water_chem(stn_df, year, csv_path, engine, samp_sel=None):
     """ Creates  CSV summarising flow and water chemistry data
-        for the RID_11 and RID_36 stations. Replaces Tore's 
+        for the stations in 'stn_df'. Replaces Tore's 
         NIVA.RESAEXTENSIONS Visual Studio project.
     
     Args:
-        stn_df:   Dataframe listing the 47 sites of interest. Must
-                  include [station_id, station_code, station_name]
+        stn_df:   Dataframe listing sites of interest. Must include 
+                  [station_id, station_code, station_name]
         year:     Int. Year of interest
         csv_path: Filename for CSV
         engine:   SQL-Alchemy 'engine' object already connected to RESA2
@@ -681,15 +681,17 @@ def write_csv_water_chem(stn_df, year, csv_path, engine, samp_sel=None):
 
     # Loop over stations
     for stn_id in stn_df['station_id'].values:
+        print(f'Processing station ID {stn_id}')
+        
         # Get WC data
-        wc_df, dup_df  = extract_water_chem(stn_id, par_list, 
+        wc_df, dup_df = extract_water_chem(stn_id, par_list, 
                                             '%s-01-01' % year,
                                             '%s-12-31' % year,
                                             engine, plot=False,
                                             samp_sel=samp_sel)
         
         if len(wc_df) == 0:
-            print ('No chemistry data found for station ID %s.' % stn_id)
+            print (f'    No chemistry data found for station ID {stn_id}.')
         
         else:
             # Get list of cols of interest for later
