@@ -64,7 +64,7 @@ Links to the annual data processing are provided below.
  
  7. **[Fill-in OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template_2017.ipynb)**. Summary results from the from the project as a whole are aggregated and reported to OSPAR in a single Excel template.
  
- ## 2018/19
+## 2018/19
 
  1. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_working_2018-19.ipynb)**. Empirical load estimation using 2018 data for the 155 water chemistry stations.
  
@@ -78,3 +78,36 @@ Links to the annual data processing are provided below.
  
  6. **[Fill-in OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template_2018.ipynb)**. Summary results from the from the project as a whole are aggregated and reported to OSPAR in a single Excel template.
 
+## 2019/20
+
+ 1. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_working_2019-20.ipynb)**
+ 
+ 2. **[Average monthly water temperatures](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/avg_monthly_temp_rid20_2019.ipynb)**
+ 
+ 3. **[Trends in concentrations and fluxes](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/trends_2019.ipynb)**
+ 
+ 4. **[Trends in temperature](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/long_term_temp_trends_hydapi.ipynb)** 
+
+ 5. **[Processing annual inputs for TEOTIL2](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/process_model_inputs_2019.ipynb)**
+ 
+ 6. **[Estimation of pollutant loads in unmonitored areas](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2019.ipynb)**
+ 
+ 7. **[Filling-in the OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template_2019.ipynb)**
+ 
+## 2020/21
+
+ 1. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/rid_working_2020-21.ipynb)**
+ 
+ 2. **[Count Limit of Detection (LOD) values](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/detection_limit_summaries_2020.ipynb)** 
+ 
+ 3. **[Average monthly water temperatures](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/avg_monthly_temp_rid20_2020.ipynb)**
+ 
+ 4. **[Trends in concentrations and fluxes](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/trends_2020.ipynb)**
+ 
+ 5. **[Trends in temperature](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/long_term_temp_trends_hydapi.ipynb)** 
+
+ 6. **[Processing annual inputs for TEOTIL2](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/process_model_inputs_2020.ipynb)**
+ 
+ 7. **[Estimation of pollutant loads in unmonitored areas](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2020.ipynb)**
+ 
+ 8. **[Filling-in the OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template_2020.ipynb)**
