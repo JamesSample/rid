@@ -114,4 +114,8 @@ Links to the annual data processing are provided below.
  
  9. **[Estimation of pollutant loads in unmonitored areas](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/loads_unmonitored_regions_2020.ipynb)**
  
- 10. **[Filling-in the OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template_2020.ipynb)**
+ 10. **[Generate summary table](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/summary_table_2020.ipynb)**
+ 
+ 11. **[Aggregate flows for OSPAR Table 9](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/recalculate_ospar_flows.ipynb)**
+ 
+ 12. **[Filling-in the OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/final_ospar_template_2020.ipynb)**
