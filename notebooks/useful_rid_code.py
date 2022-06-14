@@ -926,6 +926,21 @@ def update_cell(row_txt, par_txt, value, col_dict, row_dict, tab):
     """
     from docx.enum.text import WD_ALIGN_PARAGRAPH
 
+    # Format to 2 decimal places, unless specified below
+    decimal_dict = {
+        "DOC": 1,
+        "NH4-N": 0,
+        "NO3-N": 0,
+        "PO4-P": 0,
+        "Part. C": 1,
+        "TOC": 1,
+        "TOTN": 0,
+        "Tot. Part. P": 1,
+        "TOTP": 0,
+        "Tot. Part. N": 1,
+    }
+    dp = decimal_dict.get(par_txt, 2)
+
     # Get row and col indices
     col = col_dict[par_txt]
     row = row_dict[row_txt]
@@ -935,9 +950,13 @@ def update_cell(row_txt, par_txt, value, col_dict, row_dict, tab):
 
     # Modify value
     if isinstance(value, float) or isinstance(value, int):
-        cell.text = "%.2f" % value
+        cell.text = f"{value:.{dp}f}"
     elif isinstance(value, str):
-        cell.text = value
+        if value.startswith("<"):
+            num_val = float(value[1:])
+            cell.text = f"<{num_val:.{dp}f}"
+        else:
+            cell.text = value
     else:
         raise ValueError("Unexpected data type.")
 
