@@ -593,7 +593,7 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True, samp_sel=
             )
 
             # Flow totals
-            sum_df = par_df.sum()
+            sum_df = par_df.sum(numeric_only=True)
             sigma_Qi_ti = sum_df["Qi_ti"]  # Denominator
 
             # Chem totals
@@ -2992,20 +2992,20 @@ def copy_word_template(table_no, year):
     elif year in (2017, 2018):
         names_dict = {
             1: "rid_water_chem_tables_template_2017-18.docx",
-            2: "rid_loads_by_river_template.docx_2017-18",
-            3: "rid_loads_overall_summary_template.docx_2017-18",
+            2: "rid_loads_by_river_template_2017-18.docx",
+            3: "rid_loads_overall_summary_template_2017-18.docx",
         }
     elif year in (2019, 2020):
         names_dict = {
             1: "rid_water_chem_tables_template_2019-20.docx",
-            2: "rid_loads_by_river_template.docx_2019-20",
-            3: "rid_loads_overall_summary_template.docx_2019-20",
+            2: "rid_loads_by_river_template_2019-20.docx",
+            3: "rid_loads_overall_summary_template_2019-20.docx",
         }
     else:
         names_dict = {
             1: "rid_water_chem_tables_template_2021-25.docx",
-            2: "rid_loads_by_river_template.docx_2019-20",
-            3: "rid_loads_overall_summary_template.docx_2019-20",
+            2: "rid_loads_by_river_template_2019-20.docx",
+            3: "rid_loads_overall_summary_template_2019-20.docx",
         }
 
     template_path = os.path.join(template_fold, names_dict[table_no])
