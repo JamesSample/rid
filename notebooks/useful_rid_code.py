@@ -10,28 +10,6 @@
 # ------------------------------------------------------------------------------
 
 
-def connect_to_nivabase(user=None, pw=None):
-    """Connect to the NIVABASE.
-    Args:
-        user: Str. Username
-        pe:   Str. Password
-
-    Returns:
-        SQLAlchemy database engine.
-    """
-    from sqlalchemy import create_engine
-
-    conn_str = (
-        f"oracle+cx_oracle://{user}:{pw}@DBORA-NIVA-PROD01.NIVA.CORP:1555/NIVABPRD"
-    )
-
-    engine = create_engine(conn_str)
-    conn = engine.connect()
-    print("Connection successful.")
-
-    return engine
-
-
 def extract_water_chem(
     stn_id, par_list, st_dt, end_dt, engine, plot=False, samp_sel=None
 ):
@@ -66,7 +44,7 @@ def extract_water_chem(
     import seaborn as sn
 
     # Check stn is valid
-    sql = "SELECT * FROM resa2.stations " "WHERE station_id = %s" % stn_id
+    sql = "SELECT * FROM resa2.stations WHERE station_id = %s" % stn_id
 
     stn_df = pd.read_sql_query(sql, engine)
 
@@ -82,7 +60,7 @@ def extract_water_chem(
             "WHERE name = '%s'" % par_list[0]
         )
     else:
-        sql = "SELECT * FROM resa2.parameter_definitions " "WHERE name in %s" % str(
+        sql = "SELECT * FROM resa2.parameter_definitions WHERE name in %s" % str(
             tuple(par_list)
         )
 
@@ -380,7 +358,7 @@ def extract_discharge(stn_id, st_dt, end_dt, engine, plot=False):
     q_df = q_df * wc_area / dis_area
 
     # Convert to daily
-    q_df = q_df.resample("D").mean()
+    q_df = q_df.resample("D").mean(numeric_only=True)
 
     # Linear interpolation of NoData gaps
     q_df.interpolate(method="linear", inplace=True)
@@ -684,7 +662,7 @@ def estimate_missing_data(wc_df, stn_id, par_list, year, engine, samp_sel=None):
                 par_ts = adjust_lod_values(par_ts)
 
                 # Calculate annual means
-                par_ts = par_ts.resample("A").mean()
+                par_ts = par_ts.resample("A").mean(numeric_only=True)
                 par_ts.dropna(how="any", inplace=True)
 
                 # If at least 3 years of data, use Sen's slope
@@ -1121,7 +1099,7 @@ def write_word_water_chem_tables(
             if len(wc_df) > 20:
                 # Data won't fit in template. Resample to monthly and write
                 # monthly averages instead
-                wc_df = wc_df.resample("M").mean()
+                wc_df = wc_df.resample("M").mean(numeric_only=True)
 
             # Get list of cols of interest for later
             cols = wc_df.columns
@@ -2960,7 +2938,11 @@ def spatial_overlays(df1, df2, how="intersection"):
         return df1
 
 
-def copy_word_template(table_no, year):
+def copy_word_template(
+    table_no,
+    year,
+    base_fold=r"/home/jovyan/shared/common/elveovervakingsprogrammet/results/word_tables",
+):
     """Copy the correct template for generating Word tables.
 
     Args:
@@ -2976,12 +2958,8 @@ def copy_word_template(table_no, year):
 
     assert table_no in (1, 2, 3), "'table_no' must be one of (1, 2, 3)."
 
-    if year < 2021:
-        template_fold = r"../../../Results/Word_Tables/Table_Templates"
-        dest_fold = f"../../../Results/Word_Tables/{year+1}Analysis_{year}Data"
-    else:
-        template_fold = r"../../../../Results/Word_Tables/Table_Templates"
-        dest_fold = f"../../../../Results/Word_Tables/{year+1}Analysis_{year}Data"
+    template_fold = os.path.join(base_fold, "table_templates")
+    dest_fold = os.path.join(base_fold, f"{year+1}Analysis_{year}Data")
 
     if year < 2017:
         names_dict = {
