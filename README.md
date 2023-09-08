@@ -159,3 +159,5 @@ Links to the annual data processing are provided below.
  5. **[Trends in concentrations and fluxes](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2022/05_trends_2022.ipynb)**
  
  6. **[Trends in temperature](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/long_term_temp_trends_hydapi.ipynb)** 
+
+ 7. **[Annual runoff bar chart](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2022/06_annual_runoff_barchart.ipynb)**
