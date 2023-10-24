@@ -136,15 +136,15 @@ Links to the annual data processing are provided below.
  
  7. **[Update regine-kommune links in TEOTIL2](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/update_regine_kommune.ipynb)** 
 
- 8. **[Processing annual inputs for TEOTIL2](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/08_process_model_inputs_2021.ipynb)**
+ 8. **[Processing annual inputs for TEOTIL2](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2021/08_process_model_inputs_2021.ipynb)**
  
- 9. **[Estimation of pollutant loads in unmonitored areas](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/09_loads_unmonitored_regions_2021.ipynb)**
+ 9. **[Estimation of pollutant loads in unmonitored areas](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2021/09_loads_unmonitored_regions_2021.ipynb)**
  
- 10. **[Generate summary table](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/10_summary_table_2021.ipynb)**
+ 10. **[Generate summary table](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2021/10_summary_table_2021.ipynb)**
  
  11. **[Aggregate flows for OSPAR Table 9](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/recalculate_ospar_flows.ipynb)**
  
- 12. **[Filling-in the OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/12_final_ospar_template_2021.ipynb)**
+ 12. **[Filling-in the OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2021/12_final_ospar_template_2021.ipynb)**
  
 ## 2022/23
 
@@ -161,3 +161,15 @@ Links to the annual data processing are provided below.
  6. **[Trends in temperature](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/long_term_temp_trends_hydapi.ipynb)** 
 
  7. **[Annual runoff bar chart](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2022/06_annual_runoff_barchart.ipynb)**
+ 
+ 8. **[Update regine-kommune links in TEOTIL2](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/update_regine_kommune.ipynb)** 
+ 
+ 9. **[Processing annual inputs for TEOTIL2](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2022/08_process_model_inputs_2022.ipynb)**
+ 
+ 10. **[Estimation of pollutant loads in unmonitored areas](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2022/09_loads_unmonitored_regions_2022.ipynb)**
+ 
+ 11. **[Generate summary table](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2022/10_summary_table_2022.ipynb)**
+ 
+ 12. **[Aggregate flows for OSPAR Table 9](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/recalculate_ospar_flows.ipynb)**
+ 
+ 13. **[Filling-in the OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2022/12_final_ospar_template_2022.ipynb)**
