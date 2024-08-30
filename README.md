@@ -173,3 +173,19 @@ Links to the annual data processing are provided below.
  12. **[Aggregate flows for OSPAR Table 9](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/recalculate_ospar_flows.ipynb)**
  
  13. **[Filling-in the OSPAR reporting template](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2022/13_final_ospar_template_2022.ipynb)**
+
+## 2023/24
+
+ 1. **[Update discharge datasets](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/update_flow_nve_hydapi.ipynb)**
+ 
+ 2. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2023/02_rid_working_2023-24.ipynb)**
+ 
+ 3. **[Count Limit of Detection (LOD) values](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2023/03_detection_limit_summaries_2023.ipynb)** 
+ 
+ 4. **[Average monthly water temperatures](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2023/04_avg_monthly_temp_rid20_2023.ipynb)**
+ 
+ 5. **[Trends in concentrations and fluxes](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2023/05_trends_2023.ipynb)**
+ 
+ 6. **[Trends in temperature](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/long_term_temp_trends_hydapi.ipynb)** 
+
+ 7. **[Annual runoff bar chart](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2023/06_annual_runoff_barchart.ipynb)**
