@@ -462,6 +462,7 @@ def estimate_loads(stn_id, par_list, year, engine, infer_missing=True, samp_sel=
         "NH4-N": [1.0e12, "tonnes"],  # ug to tonnes
         "TOTN": [1.0e12, "tonnes"],  # ug to tonnes
         "SiO2": [1.0e9, "tonnes"],  # mg to tonnes
+        "Si": [1.0e9, "tonnes"],  # mg to tonnes
         "Ag": [1.0e12, "tonnes"],  # ug to tonnes
         "As": [1.0e12, "tonnes"],  # ug to tonnes
         "Pb": [1.0e12, "tonnes"],  # ug to tonnes
