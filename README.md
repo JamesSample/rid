@@ -189,3 +189,19 @@ Links to the annual data processing are provided below.
  6. **[Trends in temperature](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/long_term_temp_trends_hydapi.ipynb)** 
 
  7. **[Annual runoff bar chart](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2023/06_annual_runoff_barchart.ipynb)**
+
+## 2024/25
+
+ 1. **[Update discharge datasets](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/update_flow_nve_hydapi.ipynb)**
+ 
+ 2. **[Data processing for "monitored" locations](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2024/02_rid_working_2024-25.ipynb)**
+ 
+ 3. **[Count Limit of Detection (LOD) values](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2024/03_detection_limit_summaries_2024.ipynb)** 
+ 
+ 4. **[Average monthly water temperatures](http://nbviewer.jupyter.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2024/04_avg_monthly_temp_rid20_2024.ipynb)**
+ 
+ 5. **[Trends in concentrations and fluxes](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2024/05_trends_2024.ipynb)**
+ 
+ 6. **[Trends in temperature](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/long_term_temp_trends_hydapi.ipynb)** 
+
+ 7. **[Annual runoff bar chart](https://nbviewer.org/github/JamesSample/rid/blob/master/notebooks/prog_2021-25/2024/06_annual_runoff_barchart.ipynb)**
