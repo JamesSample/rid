@@ -92,12 +92,12 @@ def extract_water_chem(
             "FROM resa2.sample_selections "
             "WHERE sample_selection_id = %s" % samp_sel
         )
-
         samp_sel_df = pd.read_sql_query(sql, engine)
 
         # Filter wc_df based on these sample_ids
         wc_df = wc_df.query(
-            "sample_id in %s" % str(tuple(samp_sel_df["water_sample_id"].values))
+            "sample_id in %s"
+            % str(tuple([int(x) for x in samp_sel_df["water_sample_id"].values]))
         )
 
     # Get all sample dates for sites and period of interest
@@ -121,7 +121,8 @@ def extract_water_chem(
 
     # Get just the parameters of interest
     wc_df = wc_df.query(
-        "wc_parameter_id in %s" % str(tuple(par_df["parameter_id"].values))
+        "wc_parameter_id in %s"
+        % str(tuple([int(x) for x in par_df["parameter_id"].values]))
     )
 
     # Join in sample dates
